@@ -18,7 +18,7 @@ class Join(typing.NamedTuple):
     full: bool
 
 
-# in compile_galaxy_schema_select we will use the sqlalchemy join
+# in compile_star_schema_select we will use the sqlalchemy join
 # function to join tables, so the values here mimic the default values
 # required by that function.
 Join.__new__.__defaults__ = (lambda *_: None, True, False)
@@ -27,52 +27,21 @@ Join.__new__.__defaults__ = (lambda *_: None, True, False)
 SqlAlchemyTable = typing.Union[sa.sql.expression.Alias, sa.sql.expression.TableClause]
 
 
-class GalaxySchema:
+class StarSchema:
     """
     Recursive container of SqlAlchemy selectables which models a
-    galaxy schema. The schema is a tree, where the nodes in the
+    star schema. The schema is a tree, where the nodes in the
     tree are SQLAlchemy tables and the edges describe the way these
     tables should be joined. By modelling the data schema in this
     fashion we can construct queries using only expressions, and
     letting the topology of the tree determine the appropriate joins.
-
-    A GalaxySchema can be constructed like so:
-
-        >>> galaxy_schema = GalaxySchema(
-        ...
-        ... )
-
-    Each node in the schema is itself a GalaxySchema, and in this
-    fashion one can compose schemas easily using ``clone`` and ``extend``:
-
-        >>> galaxy_schema.clone()
-
-    The schema can also be seen as a container of sqlalchemy tables,
-    these tables can be retrieved from the collection so:
-
-        >>> galaxy_schema.table
-
-    Each table must have a unique name, so if the same sqlalchemy table
-    is referenced multiple times in the schema it must be aliased:
-
-        >>> GalaxySchema()
-
-    Once a topology is defined we can select from it. It can be used to
-    generate queries using regular sqlalchemy, GalaxySchema.select
-    generates a sqlalchemy query...
-
-        >>> galaxy_schema.select(galaxy_schema.some_table.c)
-
-    Notice that the ``select_from`` is not needed, this is
-    automatically generated based on the expressions in the query upon
-    compilation.
     """
-    GalaxySchemas = typing.Iterable['GalaxySchema']
+    StarSchemas = typing.Iterable['StarSchema']
 
     def __init__(
         self,
         center: SqlAlchemyTable,
-        children: typing.Optional[GalaxySchemas] = None,
+        children: typing.Optional[StarSchemas] = None,
         *,
         join: typing.Optional[Join] = None,
     ):
@@ -88,25 +57,65 @@ class GalaxySchema:
         self.join = Join() if join is None else join
         self._children = children or []
 
-        self._galaxys_schemas = {}
+        self._stars_schemas = {}
         self.parent = None
 
-        def init_tree(galaxy_schema: GalaxySchema):
-            if galaxy_schema.center.name in self._galaxys_schemas:
+        def init_tree(star_schema: StarSchema):
+            if star_schema.center.name in self._stars_schemas:
                 raise ValueError(
-                    f'{galaxy_schema.center.name} already exists in'
-                    f' this galaxy schema'
+                    f'{star_schema.center.name} already exists in'
+                    f' this star schema'
                 )
-            self._galaxys_schemas[galaxy_schema.center.name] = galaxy_schema
-            for child_galaxy_schema in galaxy_schema._children:
-                child_galaxy_schema.parent = galaxy_schema
-                init_tree(child_galaxy_schema)
+            self._stars_schemas[star_schema.center.name] = star_schema
+            for child_star_schema in star_schema._children:
+                child_star_schema.parent = star_schema
+                init_tree(child_star_schema)
 
         init_tree(self)
 
+    @classmethod
+    def from_dicts(cls, dicts):
+        """
+        Create a star schema from recursive dictionaries, the key of
+        each dictionary is the center table, the value being the child
+        schemas:
+
+        >>> meta = sa.MetaData()
+        >>> sale = sa.Table('sale', meta,
+        ...     sa.Column('id'),
+        ...     sa.Column('customer_id', sa.Integer, sa.ForeignKey("customer.id")),
+        ...     sa.Column('product_id', sa.Integer, sa.ForeignKey("product.id")),
+        ... )
+        >>> product = sa.Table('product', meta, sa.Column('id'))
+        >>> customer = sa.Table('customer', meta, sa.Column('id'))
+        >>> StarSchema.from_dicts({
+        ...     sale: {
+        ...         product: {},
+        ...         customer: {},
+        ...     }
+        ... })
+
+        This is offers some nice syntactic sugar for defining a schema,
+        however we cannot customize the joins, and so this method only
+        works with LEFT OUTER joins where there is a foreign key
+        between the left and right tables.
+        TODO: Design a nice way to remove this constraint
+
+        :param dicts: Recursive dicts describing this schema
+
+        :return: StarSchema instance created from ``dicts``.
+        """
+        if len(dicts) > 1:
+            raise ValueError("Star schema should have 1 root node")
+
+        def _make(d):
+            return [StarSchema(c, children=_make(k)) for c, k in d.items()]
+
+        return _make(dicts)[0]
+
     def select(self, *args, **kwargs):
         """
-        Construct a SQLAlchemy select statement from the galaxy schema.
+        Construct a SQLAlchemy select statement from the star schema.
         The main difference between this and ``sqlalchemy.select`` is
         that we can automatically determine which joins are needed based
         on the defined schema and the requested expressions.
@@ -116,53 +125,61 @@ class GalaxySchema:
 
         :return: SQLAlchemy select statement.
         """
-        return GalaxySchemaSelect(self, *args, **kwargs)
+        return StarSchemaSelect(self, *args, **kwargs)
 
     def __getattr__(self, table_name: str):
         """
+        Get a table that is part of this star schema.
 
-        :param table_name:
+        :param table_name: Name of the table to retrieve.
 
-        :return:
+        :return: SQLAlchemy selectable.
         """
-        return self._galaxys_schemas[table_name].center
+        return self._stars_schemas[table_name].center
 
     def __repr__(self):
         """
-        :return:
+        :return: string representation of this schema
         """
         return self.center.name
 
-    def path_to_center(self, table):
+    def path_to_center(self, table: SqlAlchemyTable) -> \
+        typing.Iterable[typing.Tuple[SqlAlchemyTable, 'StarSchema']]:
         """
+        Get the path from a particular table in this schema to the
+        center of the schema.
 
-        :param table:
+        :param table: The table to get the path for.
 
-        :return:
+        :return: Iterable of tuples where each tuple are the left and
+                 right sides of a SQL join. The left side is a
+                 SQLAlchemy table and the right side is a StarSchema
+                 which describes how it should be joined to it's parent
+                 StarSchema.
         """
-        if table.name in self._galaxys_schemas:
-            galaxy_schema = self._galaxys_schemas[table.name]
+        if table.name in self._stars_schemas:
+            star_schema = self._stars_schemas[table.name]
             path = []
-            while galaxy_schema.parent != None:
-                path.append((galaxy_schema.parent, galaxy_schema))
-                galaxy_schema = galaxy_schema.parent
+            while star_schema.parent != None:
+                path.append((star_schema.parent, star_schema))
+                star_schema = star_schema.parent
             return reversed(path)
         else:
             return []
 
 
-class GalaxySchemaSelect(sa.sql.expression.Select):
+class StarSchemaSelect(sa.sql.expression.Select):
     """
     Custom SQLAlchemy expression for automatically generating the
     select_from for a query based on the expressions that are present
     in the query. In addition to the actual query (defined by *args
-    and **kwargs, we store the galaxy that contains the tables for
+    and **kwargs, we store the star that contains the tables for
     generating the appropriate select_from based on the expressions
     in the query).
     """
-    def __init__(self, galaxy_schema, *args, **kwargs):
+    def __init__(self, star_schema, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.galaxy_schema = galaxy_schema
+        self.star_schema = star_schema
 
     def select_from(self, fromclause):
         """
@@ -176,15 +193,13 @@ class GalaxySchemaSelect(sa.sql.expression.Select):
         )
 
 
-@compiles(GalaxySchemaSelect)
-def compile_galaxy_schema_select(element, compiler, **kw):
+@compiles(StarSchemaSelect)
+def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
     """
-
-    :param element:
-    :param compiler:
-    :param kw:
-
-    :return:
+    Compile a StarSchemaSelect element, this function turns the special
+    StarSchemaSelect created by ``StarSchema.select`` into SQL code.
+    We generate the appropriate ``select_from`` based on the
+    expressions that occur in the query.
     """
     def get_children(expression):
         """
@@ -208,12 +223,12 @@ def compile_galaxy_schema_select(element, compiler, **kw):
                 yield from get_children(child)
 
     # find all the tables that need to be joined by recursively looking
-    # at each expression in the query, and traversing the galaxy topology
+    # at each expression in the query, and traversing the star topology
     # for each table found to the center. This will determine the joins
     # that are required
     joins = (
         get_children(element)
-        | mapwith(element.galaxy_schema.path_to_center)
+        | mapwith(element.star_schema.path_to_center)
         | to(chain.from_iterable)
         | to(unique)
         | to(list)
@@ -222,7 +237,7 @@ def compile_galaxy_schema_select(element, compiler, **kw):
     # generate the select_from using all the referenced tables and the
     # various joins required for these tables based on the traversal
     # we just did.
-    select_from = element.galaxy_schema.center
+    select_from = element.star_schema.center
     for left, right in joins:
         select_from = select_from.join(
             right.center,
@@ -233,5 +248,5 @@ def compile_galaxy_schema_select(element, compiler, **kw):
 
     # now let SQLAlchemy complete the compilation of the actual query
     # using the generated select_from
-    select = super(GalaxySchemaSelect, element).select_from(select_from)
-    return compiler.process(super(GalaxySchemaSelect, select), **kw)
+    select = super(StarSchemaSelect, element).select_from(select_from)
+    return compiler.process(super(StarSchemaSelect, select), **kw)

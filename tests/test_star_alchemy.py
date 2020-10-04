@@ -1,11 +1,12 @@
 import sqlalchemy as sa
 import pytest
 from sqlparse import format
-from galaxy_schema import GalaxySchema, Join
+from star_alchemy import StarSchema, Join
+from tests.util import assert_query_equals
 
 
 @pytest.fixture()
-def fixture_galaxy_schema():
+def fixture_star_schema():
     meta = sa.MetaData()
 
     tb1 = sa.Table('tb1', meta,
@@ -31,49 +32,28 @@ def fixture_galaxy_schema():
 
     cte = sa.select(tb1.c).cte('cte')
 
-    return GalaxySchema(tb1, children=[
-        GalaxySchema(cte, join=Join(lambda tb1, cte: tb1.id == cte.id)),
-        GalaxySchema(cte.alias('cte_alias'), join=Join(lambda cte, cte_alias: cte.id == cte_alias.id)),
-        GalaxySchema(tb2, children=[
-            GalaxySchema(tb3, children=[
-                GalaxySchema(tb4.alias('tb5'), join=Join(lambda tb3, tb5: tb3.id == tb5.id)),
+    return StarSchema(tb1, children=[
+        StarSchema(cte, join=Join(lambda tb1, cte: tb1.id == cte.id)),
+        StarSchema(cte.alias('cte_alias'), join=Join(lambda cte, cte_alias: cte.id == cte_alias.id)),
+        StarSchema(tb2, children=[
+            StarSchema(tb3, children=[
+                StarSchema(tb4.alias('tb5'), join=Join(lambda tb3, tb5: tb3.id == tb5.id)),
             ]),
-            GalaxySchema(tb4, join=Join(lambda tb3, tb4: tb3.id == tb4.id)),
+            StarSchema(tb4, join=Join(lambda tb3, tb4: tb3.id == tb4.id)),
         ]),
-        GalaxySchema(tb6, join=Join(lambda tb1, tb6: tb1.id == tb6.id, isouter=False)),
+        StarSchema(tb6, join=Join(lambda tb1, tb6: tb1.id == tb6.id, isouter=False)),
     ])
 
 
-def query_str(query):
-    """
-
-    :param query:
-
-    :return:
-    """
-    from sqlalchemy.dialects import postgresql
-    return str(query.compile(
-        dialect=postgresql.dialect(),
-        compile_kwargs={"literal_binds": True},
-    ))
-
-
-def assert_query(actual, expected):
-    actual_formatted_str = format(query_str(actual).strip(), reindent=True)
-    expected_formatted_str = format(expected.strip(), reindent=True)
-    if actual_formatted_str.lower() != expected_formatted_str.lower():
-        assert actual_formatted_str == expected_formatted_str
-
-
-def test_prevent_explicit_call_to_select_from(fixture_galaxy_schema):
+def test_prevent_explicit_call_to_select_from(fixture_star_schema):
     with pytest.raises(Exception):
-        fixture_galaxy_schema.select([]).select_from(fixture_galaxy_schema.tb1)
+        fixture_star_schema.select([]).select_from(fixture_star_schema.tb1)
 
 
-def test_no_joins(fixture_galaxy_schema):
-    assert_query(
+def test_no_joins(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select(fixture_galaxy_schema.tb1.c)
+            fixture_star_schema.select(fixture_star_schema.tb1.c)
         ),
         expected="""
             SELECT tb1.id, tb1.tb2_id FROM tb1
@@ -81,10 +61,10 @@ def test_no_joins(fixture_galaxy_schema):
     )
 
 
-def test_no_table(fixture_galaxy_schema):
-    assert_query(
+def test_no_table(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select([sa.func.count()])
+            fixture_star_schema.select([sa.func.count()])
         ),
         expected="""
             SELECT count(*) AS count_1 
@@ -93,10 +73,10 @@ def test_no_table(fixture_galaxy_schema):
     )
 
 
-def test_join_internal_node(fixture_galaxy_schema):
-    assert_query(
+def test_join_internal_node(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select(fixture_galaxy_schema.tb2.c)
+            fixture_star_schema.select(fixture_star_schema.tb2.c)
         ),
         expected="""
             SELECT tb2.id, tb2.tb3_id 
@@ -106,11 +86,11 @@ def test_join_internal_node(fixture_galaxy_schema):
     )
 
 
-def test_join_cte(fixture_galaxy_schema):
+def test_join_cte(fixture_star_schema):
 
-    assert_query(
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select(fixture_galaxy_schema.cte.c)
+            fixture_star_schema.select(fixture_star_schema.cte.c)
         ),
         expected="""
             WITH cte AS (
@@ -125,10 +105,10 @@ def test_join_cte(fixture_galaxy_schema):
     )
 
 
-def test_join_aliased_cte(fixture_galaxy_schema):
-    assert_query(
+def test_join_aliased_cte(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select(fixture_galaxy_schema.cte_alias.c)
+            fixture_star_schema.select(fixture_star_schema.cte_alias.c)
         ),
         expected="""
             WITH cte AS (
@@ -143,10 +123,10 @@ def test_join_aliased_cte(fixture_galaxy_schema):
     )
 
 
-def test_join_leaf_node(fixture_galaxy_schema):
-    assert_query(
+def test_join_leaf_node(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select(fixture_galaxy_schema.tb5.c)
+            fixture_star_schema.select(fixture_star_schema.tb5.c)
         ),
         expected="""
             SELECT tb5.id
@@ -158,10 +138,10 @@ def test_join_leaf_node(fixture_galaxy_schema):
     )
 
 
-def test_custom_join(fixture_galaxy_schema):
-    assert_query(
+def test_custom_join(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select(fixture_galaxy_schema.tb4.c)
+            fixture_star_schema.select(fixture_star_schema.tb4.c)
         ),
         expected="""
             SELECT tb4.id
@@ -172,10 +152,10 @@ def test_custom_join(fixture_galaxy_schema):
     )
 
 
-def test_inner_join(fixture_galaxy_schema):
-    assert_query(
+def test_inner_join(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select(fixture_galaxy_schema.tb6.c)
+            fixture_star_schema.select(fixture_star_schema.tb6.c)
         ),
         expected="""
             SELECT tb6.id
@@ -185,12 +165,12 @@ def test_inner_join(fixture_galaxy_schema):
     )
 
 
-def test_simple_union(fixture_galaxy_schema):
-    assert_query(
+def test_simple_union(fixture_star_schema):
+    assert_query_equals(
         actual=(
             sa.union(
-                fixture_galaxy_schema.select([fixture_galaxy_schema.tb1.c.id]),
-                fixture_galaxy_schema.select([fixture_galaxy_schema.tb1.c.id]),
+                fixture_star_schema.select([fixture_star_schema.tb1.c.id]),
+                fixture_star_schema.select([fixture_star_schema.tb1.c.id]),
             )
         ),
         expected="""
@@ -203,12 +183,12 @@ def test_simple_union(fixture_galaxy_schema):
     )
 
 
-def test_simple_union_with_complex_joins(fixture_galaxy_schema):
-    assert_query(
+def test_simple_union_with_complex_joins(fixture_star_schema):
+    assert_query_equals(
         actual=(
             sa.union(
-                fixture_galaxy_schema.select([fixture_galaxy_schema.tb1.c.id]),
-                fixture_galaxy_schema.select([fixture_galaxy_schema.cte_alias.c.id])
+                fixture_star_schema.select([fixture_star_schema.tb1.c.id]),
+                fixture_star_schema.select([fixture_star_schema.cte_alias.c.id])
             )
         ),
         expected="""
@@ -227,11 +207,11 @@ def test_simple_union_with_complex_joins(fixture_galaxy_schema):
     )
 
 
-def test_subquery(fixture_galaxy_schema):
-    assert_query(
+def test_subquery(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select([fixture_galaxy_schema.tb1.c.id])
-            .where(fixture_galaxy_schema.tb1.c.id.in_(fixture_galaxy_schema.select([fixture_galaxy_schema.cte_alias.c.id])))
+            fixture_star_schema.select([fixture_star_schema.tb1.c.id])
+            .where(fixture_star_schema.tb1.c.id.in_(fixture_star_schema.select([fixture_star_schema.cte_alias.c.id])))
         ),
         expected="""
             WITH cte AS (
@@ -250,10 +230,10 @@ def test_subquery(fixture_galaxy_schema):
     )
 
 
-def test_order_by(fixture_galaxy_schema):
-    assert_query(
+def test_order_by(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select([fixture_galaxy_schema.tb1.c.id]).order_by(fixture_galaxy_schema.tb1.c.id)
+            fixture_star_schema.select([fixture_star_schema.tb1.c.id]).order_by(fixture_star_schema.tb1.c.id)
         ),
         expected="""
             SELECT tb1.id FROM tb1 ORDER BY tb1.id
@@ -261,10 +241,10 @@ def test_order_by(fixture_galaxy_schema):
     )
 
 
-def test_order_by_joined(fixture_galaxy_schema):
-    assert_query(
+def test_order_by_joined(fixture_star_schema):
+    assert_query_equals(
         actual=(
-            fixture_galaxy_schema.select([fixture_galaxy_schema.tb1.c.id]).order_by(fixture_galaxy_schema.tb2.c.id)
+            fixture_star_schema.select([fixture_star_schema.tb1.c.id]).order_by(fixture_star_schema.tb2.c.id)
         ),
         expected="""
             SELECT tb1.id 
@@ -272,4 +252,14 @@ def test_order_by_joined(fixture_galaxy_schema):
             LEFT OUTER JOIN tb2 ON tb2.id = tb1.tb2_id
             ORDER BY tb2.id
         """
+    )
+
+
+def test_cte_from_star_select(fixture_star_schema):
+    cte = fixture_star_schema.select([fixture_star_schema.tb1.c.id]).cte('cte')
+    assert_query_equals(
+        actual=sa.select([cte.c.id]),
+        expected="""
+            WITH cte AS (SELECT tb1.id AS id FROM tb1) SELECT cte.id FROM cte
+        """,
     )
