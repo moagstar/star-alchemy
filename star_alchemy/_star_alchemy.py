@@ -2,76 +2,65 @@
 import typing
 from itertools import chain
 # 3rd party
+import attr
 import sqlalchemy as sa
-from funcoperators import mapwith, to
+from funcoperators import to, mapwith
 from sqlalchemy.ext.compiler import compiles
 from toolz import unique
 
 
-class Join(typing.NamedTuple):
+@attr.s(frozen=True, auto_attribs=True)
+class Join:
     """
-    Describes how two sqlalchemy tables are joined together, these
-    values are used as arguments to the sqlalchemy join function.
+    Describe how two sqlalchemy tables are joined together, will be
+    used as arguments to the sqlalchemy join function. So the
+    defaults mimic those found in join.
     """
-    onclause: typing.Union[typing.Callable, None]
-    isouter: bool
-    full: bool
-
-
-# in compile_star_schema_select we will use the sqlalchemy join
-# function to join tables, so the values here mimic the default values
-# required by that function.
-Join.__new__.__defaults__ = (lambda *_: None, True, False)
+    onclause: typing.Union[typing.Callable, None] = lambda *_: None
+    isouter: bool = True
+    full: bool = False
 
 
 SqlAlchemyTable = typing.Union[sa.sql.expression.Alias, sa.sql.expression.TableClause]
 
 
+@attr.s(auto_attribs=True)
 class StarSchema:
-    """
-    Recursive container of SqlAlchemy selectables which models a
-    star schema. The schema is a tree, where the nodes in the
-    tree are SQLAlchemy tables and the edges describe the way these
-    tables should be joined. By modelling the data schema in this
-    fashion we can construct queries using only expressions, and
-    letting the topology of the tree determine the appropriate joins.
-    """
-    StarSchemas = typing.Iterable['StarSchema']
 
-    def __init__(
-        self,
-        center: SqlAlchemyTable,
-        children: typing.Optional[StarSchemas] = None,
-        *,
-        join: typing.Optional[Join] = None,
-    ):
-        """
-        :param center:   The center table of this topology, when
-                         auto-generating the select_from for queries
-                         joins will try to be made to this table.
-        :param children: The children on this topology.
-        :param join:     The manner in which this center table is
-                         joined to it's parent.
-        """
-        self.center = center
-        self.join = Join() if join is None else join
-        self._children = children or []
+    table: SqlAlchemyTable
+    parent: typing.Optional['StarSchema'] = None
+    join: Join = Join()
+    _children: typing.Dict[str, 'StarSchema'] = attr.Factory(dict)
 
-        self._stars_schemas = {}
-        self.parent = None
+    def select(self, *args, **kwargs):
+        return StarSchemaSelect(self, *args, **kwargs)
 
-        def init_tree(star_schema: StarSchema):
-            if star_schema.center.name in self._stars_schemas:
-                raise ValueError(
-                    f'{star_schema.center.name} already exists in'
-                    f' this star schema'
-                )
-            self._stars_schemas[star_schema.center.name] = star_schema
-            for child_star_schema in star_schema._children:
-                child_star_schema.parent = star_schema
-                init_tree(child_star_schema)
+    @property
+    def tables(self):
+        return {s.table.name: s.table for s in self}
 
-        init_tree(self)
+    def path(self, table):
+        star_schema = {s.table: s for s in self}[table]
+        path = []
+        while star_schema.parent != None:
+            path.append((star_schema.parent, star_schema))
+            star_schema = star_schema.parent
+        return reversed(path)
+
+    def __attrs_post_init__(self):
+        if self.parent is not None:
+            self.parent._children[self.table.name] = self
+
+    def __getitem__(self, item):
+        # make a detached clone of the requested sub schema
+        return attr.evolve(self._children[item], parent=None)
+
+    def __iter__(self):
+        def recurse(s: StarSchema):
+            yield s
+            for c in s._children.values():
+                yield from recurse(c)
+        return recurse(self)
 
     @classmethod
     def from_dicts(cls, dicts):
@@ -95,12 +84,6 @@ class StarSchema:
         ...     }
         ... })
 
-        This is offers some nice syntactic sugar for defining a schema,
-        however we cannot customize the joins, and so this method only
-        works with LEFT OUTER joins where there is a foreign key
-        between the left and right tables.
-        TODO: Design a nice way to remove this constraint
-
         :param dicts: Recursive dicts describing this schema
 
         :return: StarSchema instance created from ``dicts``.
@@ -108,64 +91,28 @@ class StarSchema:
         if len(dicts) > 1:
             raise ValueError("Star schema should have 1 root node")
 
+        # TODO: Really not sure about this way of creating
+        #  the schema
         def _make(d):
-            return [StarSchema(c, children=_make(k)) for c, k in d.items()]
+            d, j = d if isinstance(d, tuple) else d, Join()
+            return [
+                StarSchema(
+                    c,
+                    join=j,
+                    children=dict(map(lambda child: (child.table.name, child), _make(k))),
+                )
+                for c, k in d.items()
+            ]
 
-        return _make(dicts)[0]
+        instance = _make(dicts)[0]
 
-    def select(self, *args, **kwargs):
-        """
-        Construct a SQLAlchemy select statement from the star schema.
-        The main difference between this and ``sqlalchemy.select`` is
-        that we can automatically determine which joins are needed based
-        on the defined schema and the requested expressions.
+        def recurse(s):
+            for child in s._children.values():
+                child.parent = s
+                recurse(child)
+        recurse(instance)
 
-        :param args: Position arguments (see sqlalchemy.select)
-        :param kwargs: Keyword arguments (see sqlalchemy.select)
-
-        :return: SQLAlchemy select statement.
-        """
-        return StarSchemaSelect(self, *args, **kwargs)
-
-    def __getattr__(self, table_name: str):
-        """
-        Get a table that is part of this star schema.
-
-        :param table_name: Name of the table to retrieve.
-
-        :return: SQLAlchemy selectable.
-        """
-        return self._stars_schemas[table_name].center
-
-    def __repr__(self):
-        """
-        :return: string representation of this schema
-        """
-        return self.center.name
-
-    def path_to_center(self, table: SqlAlchemyTable) -> \
-        typing.Iterable[typing.Tuple[SqlAlchemyTable, 'StarSchema']]:
-        """
-        Get the path from a particular table in this schema to the
-        center of the schema.
-
-        :param table: The table to get the path for.
-
-        :return: Iterable of tuples where each tuple are the left and
-                 right sides of a SQL join. The left side is a
-                 SQLAlchemy table and the right side is a StarSchema
-                 which describes how it should be joined to it's parent
-                 StarSchema.
-        """
-        if table.name in self._stars_schemas:
-            star_schema = self._stars_schemas[table.name]
-            path = []
-            while star_schema.parent != None:
-                path.append((star_schema.parent, star_schema))
-                star_schema = star_schema.parent
-            return reversed(path)
-        else:
-            return []
+        return instance
 
 
 class StarSchemaSelect(sa.sql.expression.Select):
@@ -181,17 +128,6 @@ class StarSchemaSelect(sa.sql.expression.Select):
         super().__init__(*args, **kwargs)
         self.star_schema = star_schema
 
-    def select_from(self, fromclause):
-        """
-        Client code should not call select_from explicitly, raise an
-        error if they attempt to do this.
-        """
-        raise RuntimeError(
-            'select_from is automatically generated based on the'
-            ' expressions present in this query, do not call'
-            ' select_from explicitly.'
-        )
-
 
 @compiles(StarSchemaSelect)
 def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
@@ -206,6 +142,7 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
         Recursively traverse the given expression tree and yield all
         sub-expressions
         """
+        # TODO: Maybe this function can be cleaned / simplified a bit
         # don't generate joins for scalar selects
         if not isinstance(expression, sa.sql.selectable.ScalarSelect):
             children = list(expression.get_children())
@@ -213,6 +150,7 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
             if isinstance(expression, sa.sql.Alias):
                 children.remove(expression.original)
             for child in children:
+                # TODO: Didn't we remove aliases above - check this?
                 if isinstance(child, (sa.sql.expression.Alias, sa.sql.expression.TableClause)):
                     yield child
                 elif isinstance(child, sa.sql.expression.ClauseList):
@@ -228,20 +166,21 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
     # that are required
     joins = (
         get_children(element)
-        | mapwith(element.star_schema.path_to_center)
-        | to(chain.from_iterable)
-        | to(unique)
-        | to(list)
+        | mapwith (element.star_schema.path)
+        | to (chain.from_iterable)
+        | to (list)
     )
+    # TODO: Because StarSchema is mutable we can't use hash to test for
+    #  unique. So we have to use this rather ugly method. Should come
+    #  up with a nicer way to do this.
+    joins = unique(joins, key=lambda lr: (lr[0].table, lr[1].table))
 
-    # generate the select_from using all the referenced tables and the
-    # various joins required for these tables based on the traversal
-    # we just did.
-    select_from = element.star_schema.center
+    # generate the select_from using all the referenced tables
+    select_from = element.star_schema.table
     for left, right in joins:
         select_from = select_from.join(
-            right.center,
-            onclause=right.join.onclause(left.center.c, right.center.c),
+            right.table,
+            onclause=right.join.onclause(left.table.c, right.table.c),
             isouter=right.join.isouter,
             full=right.join.full,
         )
