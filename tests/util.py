@@ -16,7 +16,9 @@ def query_str(query):
 
 
 def assert_query_equals(actual, expected):
-    actual_formatted_str = sqlparse.format(query_str(actual).strip(), reindent=True)
+    if not isinstance(actual, str):
+        actual = query_str(actual)
+    actual_formatted_str = sqlparse.format(actual.strip(), reindent=True)
     expected_formatted_str = sqlparse.format(expected.strip(), reindent=True)
     if actual_formatted_str.lower() != expected_formatted_str.lower():
         assert actual_formatted_str == expected_formatted_str
