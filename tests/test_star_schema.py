@@ -148,3 +148,39 @@ class StarSchemaTestCase(TestCase):
                 LEFT OUTER JOIN product_info_cte ON product.id = product_info_cte.id
             """),
         )
+
+    def test_join_sub_select(self):
+        self.assertEqual(
+            normalize_query(
+                self.sales.select([
+                    self.sales.tables['product_info_sub'].c.id.label('id'),
+                ])
+            ),
+            normalize_query("""
+                SELECT product_info_sub.id AS id
+                FROM sale 
+                LEFT OUTER JOIN product ON sale.product_id = product.id
+                LEFT OUTER JOIN (
+                    SELECT product.id AS id, count(*) as count_1
+                    FROM product
+                ) AS product_info_sub ON product.id = product_info_sub.id
+            """),
+        )
+
+    def test_union(self):
+        self.assertEqual(
+            normalize_query(
+                sa.union(
+                    self.sales.select([self.sales.tables['sale'].c.id]),
+                    self.sales.select([self.sales.tables['customer'].c.id]),
+                )
+            ),
+            normalize_query("""
+                SELECT sale.id 
+                FROM sale
+                UNION
+                SELECT customer.id
+                FROM sale
+                LEFT OUTER JOIN customer ON sale.customer_id = customer.id
+            """),
+        )

@@ -1,4 +1,3 @@
-import pytest
 import sqlalchemy as sa
 from star_alchemy import StarSchema
 

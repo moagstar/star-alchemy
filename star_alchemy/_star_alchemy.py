@@ -152,41 +152,17 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
     ``select_from`` based on the expressions that occur in the query,
     and then let SQLAlchemy do it's magic on the rest.
     """
-    def get_referenced_tables(expression):
-        """
-        Recursively traverse the given expression tree and yield all
-        tables referenced in all sub-expressions
-        """
-        # don't generate joins for scalar selects
-        if not isinstance(expression, sa.sql.selectable.ScalarSelect):
-            children = list(expression.get_children())
-            # don't recurse table aliases
-            if isinstance(expression, sa.sql.Alias):
-                children.remove(expression.original)
-            for child in children:
-                if isinstance(child, (sa.sql.expression.Alias, sa.sql.expression.TableClause)):
-                    yield child
-                elif isinstance(child, sa.sql.expression.ClauseList):
-                    for clause in child.clauses:
-                        is_column = isinstance(clause, sa.sql.expression.ColumnClause)
-                        if is_column and clause.table is not None:
-                            yield clause.table
-                yield from get_referenced_tables(child)
-
-    tables = {
-        expression.table
-        for expression in iterate(element, {'column_collections': False})
-        if isinstance(expression, Column) and not isinstance(expression.table, StarSchemaSelect)
-    }
-
     # traverse the expression tree to get all subexpressions, then for
     # each subexpression get the path to the center of the schema, the
     # edges in these paths are the joins that need to be made
     star_schemas = {s.join.table: s for s in element.star_schema}
     joins = (
         star_schema
-        for table in get_referenced_tables(element)
-        for star_schema in star_schemas[table].path | to(list) | to(reversed)
+
+        for expression in iterate(element, {'column_collections': False})
+        if isinstance(expression, Column) and not isinstance(expression.table, StarSchemaSelect)
+
+        for star_schema in star_schemas[expression.table].path | to(list) | to(reversed)
         if star_schema.parent is not None  # don't need to create a join from root -> root
     )
 

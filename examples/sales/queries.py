@@ -7,14 +7,14 @@ def select_high_value_non_us_sales_per_employee():
     return cube.select(
         schema,
         dimensions=[
-            schema.employee.c.id,
+            schema.tables['employee'].c.id,
         ],
         measures=[
-            sa.func.count(sa.func.distinct(schema.sale.c.id)),
+            sa.func.count(sa.func.distinct(schema.tables['sale'].c.id)),
         ],
         filters=[
-            schema.product.c.unit_price > 20,
-            schema.customer_location.c.country != 'US',
+            schema.tables['product'].c.unit_price > 20,
+            schema.tables['customer_location'].c.country != 'US',
         ],
     )
 
