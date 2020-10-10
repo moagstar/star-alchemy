@@ -22,3 +22,16 @@ def assert_query_equals(actual, expected):
     expected_formatted_str = sqlparse.format(expected.strip(), reindent=True)
     if actual_formatted_str.lower() != expected_formatted_str.lower():
         assert actual_formatted_str == expected_formatted_str
+
+
+def normalize_query(q):
+    if not isinstance(q, str):
+        q = query_str(q)
+    return sqlparse.format(
+        q.strip(),
+        reindent=True,
+        reindent_aligned=True,
+        keyword_case='upper',
+        use_space_around_operators=True,
+        strip_whitespace=True,
+    )

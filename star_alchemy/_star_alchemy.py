@@ -4,8 +4,10 @@ import typing
 import attr
 import sqlalchemy as sa
 from funcoperators import to
+from sqlalchemy import Column
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import ColumnCollection, ClauseElement
+from sqlalchemy.sql.visitors import iterate
 from toolz import unique
 
 
@@ -170,6 +172,12 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
                         if is_column and clause.table is not None:
                             yield clause.table
                 yield from get_referenced_tables(child)
+
+    tables = {
+        expression.table
+        for expression in iterate(element, {'column_collections': False})
+        if isinstance(expression, Column) and not isinstance(expression.table, StarSchemaSelect)
+    }
 
     # traverse the expression tree to get all subexpressions, then for
     # each subexpression get the path to the center of the schema, the
