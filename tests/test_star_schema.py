@@ -7,32 +7,71 @@ from tests import tables
 from tests.util import normalize_query
 
 
-class StarSchemaTestCase(TestCase):
+def fixture_sale():
+    """
+    :return: StarSchema that can be used for testing
+    """
+    product_info = sa.select([tables.product.c.id, sa.func.count()])
+    product_info_sub = product_info.alias('product_info_sub')
+    product_info_cte = product_info.cte('product_info_cte')
 
+    return StarSchema.from_dicts({
+        tables.sale: {
+            tables.product: {
+                tables.category: {},
+                Join(product_info_sub, lambda l, r: l.c.id == r.c.id): {},
+                Join(product_info_cte, lambda l, r: l.c.id == r.c.id): {},
+            },
+            tables.employee: {
+                tables.department: {},
+                tables.location.alias('employee_location'): {},
+            },
+            tables.customer: {
+                tables.location.alias('customer_location'): {},
+            },
+        },
+    })
+
+
+class StarSchemaUnitTestCase(TestCase):
+    """
+    Unit style tests for verifying fundamental low level functionality
+    of the StarSchema class.
+    """
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls.sales = fixture_sale()
 
-        product_info = sa.select([tables.product.c.id, sa.func.count()])
-        product_info_sub = product_info.alias('product_info_sub')
-        product_info_cte = product_info.cte('product_info_cte')
+    def test_path(self):
+        star_schemas = {s.join.table.name: s for s in self.sales}
+        sub_tests = [
+            ("sale", "sale"),
+            ("product", "sale/product"),
+            ("employee", "sale/employee"),
+            ("customer", "sale/customer"),
+            ("category", "sale/product/category"),
+            ("product_info_sub", "sale/product/product_info_sub"),
+            ("product_info_cte", "sale/product/product_info_cte"),
+            ("department", "sale/employee/department"),
+            ("employee_location", "sale/employee/employee_location"),
+            ("customer_location", "sale/customer/customer_location"),
+        ]
+        for table, expected in sub_tests:
+            with self.subTest(table):
+                actual = "/".join(x.join.table.name for x in star_schemas[table].path)
+                self.assertEqual(actual, expected)
 
-        cls.sales = StarSchema.from_dicts({
-            tables.sale: {
-                tables.product: {
-                    tables.category: {},
-                    Join(product_info_sub, lambda l, r: l.c.id == r.c.id): {},
-                    Join(product_info_cte, lambda l, r: l.c.id == r.c.id): {},
-                },
-                tables.employee: {
-                    tables.department: {},
-                    tables.location.alias('employee_location'): {},
-                },
-                tables.customer: {
-                    tables.location.alias('customer_location'): {},
-                },
-            },
-        })
+
+class StarSchemaQueryTestCase(TestCase):
+    """
+    Generate queries from the sale fixture and check that the expected
+    SQL is generated.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.sales = fixture_sale()
 
     def test_no_table(self):
         self.assertEqual(
@@ -182,5 +221,19 @@ class StarSchemaTestCase(TestCase):
                 SELECT customer.id
                 FROM sale
                 LEFT OUTER JOIN customer ON sale.customer_id = customer.id
+            """),
+        )
+
+    def test_detach(self):
+        product = self.sales['product']
+
+        self.assertEqual(
+            normalize_query(
+                product.select([product.tables['category'].c.id]),
+            ),
+            normalize_query("""
+                SELECT category.id 
+                FROM product
+                LEFT OUTER JOIN category ON product.category_id = category.id
             """),
         )

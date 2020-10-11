@@ -36,7 +36,6 @@ class StarSchemaSelect(sa.sql.expression.Select):
     query based on the expressions present and the topology of the
     schema.
     """
-
     def __init__(self, star_schema, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.star_schema = star_schema
@@ -67,13 +66,14 @@ class StarSchema:
         return StarSchemaSelect(self, *args, **kwargs)
 
     @property
-    def path(self) -> typing.Iterable['StarSchema']:
+    def path(self) -> typing.Tuple['StarSchema']:
         """
         :return:
         """
-        yield self
-        if self.parent != None:
-            yield from StarSchema.path.__get__(self.parent)
+        def make_path(star_schema):
+            yield star_schema
+            yield from () if star_schema.parent is None else make_path(star_schema.parent)
+        return make_path(self) | to(tuple) | to(reversed) | to(tuple)
 
     def __getitem__(self, table_name: str) -> 'StarSchema':
         """
@@ -88,7 +88,11 @@ class StarSchema:
 
         :return: Detached sub-schema.
         """
-        return attr.evolve(self._children[table_name], parent=None)
+        # TODO: This doesn't work because the other sub schemas still
+        # point to the old detached root, need to make a full clone of
+        # the entire schema.
+        join = Join(self._children[table_name].join.table)
+        return attr.evolve(self._children[table_name], parent=None, join=join)
 
     def __iter__(self) -> typing.Iterable['StarSchema']:
         """
