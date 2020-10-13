@@ -5,6 +5,6 @@ galaxy schemas.
 
 ## Features
 
-- Define topology.
-- Compose schemas.
-- Don't worry about joins
+- Define topology using nested diffs.
+- Detach and compose schemas.
+- Don't worry about which joins to make in ``select_from``
