@@ -35,3 +35,19 @@ def normalize_query(q):
         use_space_around_operators=True,
         strip_whitespace=True,
     )
+
+
+class AssertQueryEqualMixin:
+
+    def assertQueryEqual(self, expected, actual):
+
+        self.assertEqual(normalize_query(expected), normalize_query(actual))
+
+
+def query_test(expected):
+    def decorator(fn):
+        def inner(self):
+            return self.assertQueryEqual(expected, fn(self))
+        return inner
+    return decorator
+

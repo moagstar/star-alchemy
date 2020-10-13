@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from star_alchemy._star_alchemy import StarSchema, Join
 from examples.sales import tables
 from tests import tables
-from tests.util import normalize_query
+from tests.util import normalize_query, query_test, AssertQueryEqualMixin
 
 
 def fixture_sale():
@@ -63,7 +63,7 @@ class StarSchemaUnitTestCase(TestCase):
                 self.assertEqual(actual, expected)
 
 
-class StarSchemaQueryTestCase(TestCase):
+class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     """
     Generate queries from the sale fixture and check that the expected
     SQL is generated.
@@ -73,167 +73,122 @@ class StarSchemaQueryTestCase(TestCase):
         super().setUpClass()
         cls.sales = fixture_sale()
 
+    @query_test(expected="""
+        SELECT count(*) AS count_1 
+        FROM sale
+    """)
     def test_no_table(self):
-        self.assertEqual(
-            normalize_query("""
-                SELECT count(*) AS count_1 
-                FROM sale
-            """),
-            normalize_query(
-                self.sales.select([sa.func.count()])
-            ),
-        )
+        return self.sales.select([sa.func.count()])
 
+    @query_test(expected="""
+        SELECT sale.id 
+        FROM sale
+    """)
     def test_no_join(self):
-        self.assertEqual(
-            normalize_query("""
-                SELECT sale.id 
-                FROM sale
-            """),
-            normalize_query(
-                self.sales.select([self.sales.tables['sale'].c.id]),
-            ),
-        )
+        return self.sales.select([self.sales.tables['sale'].c.id])
 
+    @query_test(expected="""
+        SELECT employee.id 
+        FROM sale 
+        LEFT OUTER JOIN employee ON sale.employee_id = employee.id
+    """)
     def test_join_internal_node(self):
-        self.assertEqual(
-            normalize_query("""
-                SELECT employee.id 
-                FROM sale 
-                LEFT OUTER JOIN employee ON sale.employee_id = employee.id
-            """),
-            normalize_query(
-                self.sales.select([self.sales.tables['employee'].c.id])
-            ),
-        )
+        return self.sales.select([self.sales.tables['employee'].c.id])
 
+    @query_test(expected="""
+        SELECT category.id 
+        FROM sale 
+        LEFT OUTER JOIN product ON sale.product_id = product.id 
+        LEFT OUTER JOIN category ON product.category_id = category.id
+    """)
     def test_join_leaf_node(self):
-        self.assertEqual(
-            normalize_query("""
-                SELECT category.id 
-                FROM sale 
-                LEFT OUTER JOIN product ON sale.product_id = product.id 
-                LEFT OUTER JOIN category ON product.category_id = category.id
-            """),
-            normalize_query(
-                self.sales.select([self.sales.tables['category'].c.id]),
-            ),
-        )
+        return self.sales.select([self.sales.tables['category'].c.id])
 
+    @query_test(expected="""
+        SELECT employee_location.id 
+        FROM sale 
+        LEFT OUTER JOIN employee ON sale.employee_id = employee.id 
+        LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id
+    """)
     def test_join_leaf_node_alias(self):
-        self.assertEqual(
-            normalize_query("""
-                SELECT employee_location.id 
-                FROM sale 
-                LEFT OUTER JOIN employee ON sale.employee_id = employee.id 
-                LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id
-            """),
-            normalize_query(
-                self.sales.select([self.sales.tables['employee_location'].c.id]),
-            ),
-        )
+        return self.sales.select([self.sales.tables['employee_location'].c.id])
 
+    @query_test(expected="""
+        SELECT employee_location.id, category.id 
+        FROM sale 
+        LEFT OUTER JOIN employee ON sale.employee_id = employee.id
+        LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id
+        LEFT OUTER JOIN product ON sale.product_id = product.id
+        LEFT OUTER JOIN category ON product.category_id = category.id
+    """)
     def test_join_branching(self):
-        self.assertEqual(
-            normalize_query("""
-                SELECT employee_location.id, category.id 
-                FROM sale 
-                LEFT OUTER JOIN employee ON sale.employee_id = employee.id
-                LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id
-                LEFT OUTER JOIN product ON sale.product_id = product.id
-                LEFT OUTER JOIN category ON product.category_id = category.id
-            """),
-            normalize_query(
-                self.sales.select([
-                    self.sales.tables['employee_location'].c.id,
-                    self.sales.tables['category'].c.id,
-                ])
-            ),
-        )
+        return self.sales.select([
+            self.sales.tables['employee_location'].c.id,
+            self.sales.tables['category'].c.id,
+        ])
 
+    @query_test(expected="""
+        SELECT employee_location.id, customer_location.id 
+        FROM sale 
+        LEFT OUTER JOIN employee ON sale.employee_id = employee.id 
+        LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id 
+        LEFT OUTER JOIN customer ON sale.customer_id = customer.id
+        LEFT OUTER JOIN location AS customer_location ON customer.location_id = customer_location.id
+    """)
     def test_branching_join_duplicate_underlying_table(self):
-        self.assertEqual(
-            normalize_query("""
-                SELECT employee_location.id, customer_location.id 
-                FROM sale 
-                LEFT OUTER JOIN employee ON sale.employee_id = employee.id 
-                LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id 
-                LEFT OUTER JOIN customer ON sale.customer_id = customer.id
-                LEFT OUTER JOIN location AS customer_location ON customer.location_id = customer_location.id
-            """),
-            normalize_query(
-                self.sales.select([
-                    self.sales.tables['employee_location'].c.id,
-                    self.sales.tables['customer_location'].c.id,
-                ])
-            ),
-        )
+        return self.sales.select([
+            self.sales.tables['employee_location'].c.id,
+            self.sales.tables['customer_location'].c.id,
+        ])
 
+    @query_test(expected="""
+        WITH product_info_cte AS (
+            SELECT product.id AS id, count(*) as count_1
+            FROM product
+        )
+        SELECT product_info_cte.id AS id
+        FROM sale 
+        LEFT OUTER JOIN product ON sale.product_id = product.id
+        LEFT OUTER JOIN product_info_cte ON product.id = product_info_cte.id
+    """)
     def test_join_cte(self):
-        self.assertEqual(
-            normalize_query("""
-                WITH product_info_cte AS (
-                    SELECT product.id AS id, count(*) as count_1
-                    FROM product
-                )
-                SELECT product_info_cte.id AS id
-                FROM sale 
-                LEFT OUTER JOIN product ON sale.product_id = product.id
-                LEFT OUTER JOIN product_info_cte ON product.id = product_info_cte.id
-            """),
-            normalize_query(
-                self.sales.select([
-                    self.sales.tables['product_info_cte'].c.id.label('id'),
-                ])
-            ),
-        )
+        return self.sales.select([
+            self.sales.tables['product_info_cte'].c.id.label('id'),
+        ])
 
+    @query_test(expected="""
+        SELECT product_info_sub.id AS id
+        FROM sale 
+        LEFT OUTER JOIN product ON sale.product_id = product.id
+        LEFT OUTER JOIN (
+            SELECT product.id AS id, count(*) as count_1
+            FROM product
+        ) AS product_info_sub ON product.id = product_info_sub.id
+    """)
     def test_join_sub_select(self):
-        self.assertEqual(
-            normalize_query("""
-                SELECT product_info_sub.id AS id
-                FROM sale 
-                LEFT OUTER JOIN product ON sale.product_id = product.id
-                LEFT OUTER JOIN (
-                    SELECT product.id AS id, count(*) as count_1
-                    FROM product
-                ) AS product_info_sub ON product.id = product_info_sub.id
-            """),
-            normalize_query(
-                self.sales.select([
-                    self.sales.tables['product_info_sub'].c.id.label('id'),
-                ])
-            ),
-        )
+        return self.sales.select([
+            self.sales.tables['product_info_sub'].c.id.label('id'),
+        ])
 
+    @query_test("""
+        SELECT sale.id 
+        FROM sale
+        UNION
+        SELECT customer.id
+        FROM sale
+        LEFT OUTER JOIN customer ON sale.customer_id = customer.id
+    """)
     def test_union(self):
-        self.assertEqual(
-            normalize_query("""
-                SELECT sale.id 
-                FROM sale
-                UNION
-                SELECT customer.id
-                FROM sale
-                LEFT OUTER JOIN customer ON sale.customer_id = customer.id
-            """),
-            normalize_query(
-                sa.union(
-                    self.sales.select([self.sales.tables['sale'].c.id]),
-                    self.sales.select([self.sales.tables['customer'].c.id]),
-                )
-            ),
+        return sa.union(
+            self.sales.select([self.sales.tables['sale'].c.id]),
+            self.sales.select([self.sales.tables['customer'].c.id]),
         )
 
+    @query_test("""
+        SELECT category.id 
+        FROM product
+        LEFT OUTER JOIN category ON product.category_id = category.id
+    """)
     def test_detach(self):
         product = self.sales['product']
-
-        self.assertEqual(
-            normalize_query("""
-                SELECT category.id 
-                FROM product
-                LEFT OUTER JOIN category ON product.category_id = category.id
-            """),
-            normalize_query(
-                product.select([product.tables['category'].c.id]),
-            ),
-        )
+        return product.select([product.tables['category'].c.id])
