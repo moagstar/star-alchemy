@@ -5,7 +5,7 @@ galaxy schemas.
 
 ## Features
 
-- Define topology using nested diffs
+- Define topology using nested dictionaries
 
 ```python
 >>> schema = StarSchema.from_dicts({
@@ -52,9 +52,9 @@ LEFT JOIN department ON employee.department_id == department.id
 You might be wondering why you would want to use this, doesn't
 SQLAlchemy follow foreign key relationships anyway to determine the
 joins that should be made? The answer is that while SQLAlchemy will
-follow foreign key relationships it doesn't magicallyknow how your data
-schema is set up, particularly when working with schemas common in OLAP.
-For example when the same table is the target of multiple foreign keys
-the basic functionality of SQLAlchemy breaks down. Also since you might
-have sub-queries or CTEs which you might want to attach to your schema
-it's not always possible to use foreign keys.
+follow foreign key relationships it doesn't magically know how your data
+schema is set up, particularly when working with star and snowflake
+schemas common in OLAP. For example when the same table is the target of
+multiple foreign keys the basic functionality of SQLAlchemy breaks down.
+Also since you might have sub-queries or CTEs which you might want to
+attach to your schema it's not always possible to use foreign keys.
