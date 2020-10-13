@@ -41,12 +41,11 @@ class StarSchemaSelect(sa.sql.expression.Select):
         self.star_schema = star_schema
 
 
-@attr.s(auto_attribs=True, hash=False)
+@attr.s(auto_attribs=True, hash=False, order=False)
 class StarSchema:
     """
 
     """
-
     join: Join
     parent: typing.Optional['StarSchema'] = None
     _children: typing.Dict[str, 'StarSchema'] = attr.Factory(dict)
@@ -74,6 +73,10 @@ class StarSchema:
             yield star_schema
             yield from () if star_schema.parent is None else make_path(star_schema.parent)
         return make_path(self) | to(tuple) | to(reversed) | to(tuple)
+
+    @property
+    def name(self) -> str:
+        return self.join.table.name
 
     def __getitem__(self, table_name: str) -> 'StarSchema':
         """
@@ -106,7 +109,7 @@ class StarSchema:
         return recurse(self)
 
     def __hash__(self) -> int:
-        return hash(self.parent) | hash(self.join)  # TODO: Include children?
+        return hash(self.join) | hash(self.parent)
 
     @classmethod
     def from_dicts(cls, dicts: typing.Dict[str, typing.Any]) -> 'StarSchema':
@@ -166,7 +169,7 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
         for expression in iterate(element, {'column_collections': False})
         if isinstance(expression, Column) and not isinstance(expression.table, StarSchemaSelect)
 
-        for star_schema in star_schemas[expression.table].path | to(list) | to(reversed)
+        for star_schema in star_schemas[expression.table].path
         if star_schema.parent is not None  # don't need to create a join from root -> root
     )
 
