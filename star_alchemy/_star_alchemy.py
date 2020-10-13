@@ -126,7 +126,7 @@ class StarSchema:
     def from_dicts(cls, dicts: typing.Dict[str, typing.Any]) -> 'StarSchema':
         """
         Create a star schema from recursive dictionaries, the key of
-        each dictionary is the center table, the value being the child
+        each dictionary is the root table, the value being the child
         schemas:
 
         :param dicts: Recursive dicts describing this schema
@@ -171,17 +171,19 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
     and then let SQLAlchemy do it's magic on the rest.
     """
     # traverse the expression tree to get all subexpressions, then for
-    # each subexpression get the path to the center of the schema, the
+    # each subexpression get the path to the root of the schema, the
     # edges in these paths are the joins that need to be made
     schemas = element.star_schema.schemas
     joins = (
         star_schema
 
         for expression in iterate(element, {'column_collections': False})
-        if isinstance(expression, Column) and not isinstance(expression.table, StarSchemaSelect)
+        if isinstance(expression, Column)                       # only interested in columns
+        if not isinstance(expression.table, StarSchemaSelect)   # but not the select itself
 
         for star_schema in schemas[expression.table.name].path
-        if star_schema.parent is not None  # don't need to create a join from root -> root
+        if star_schema.parent is not None                       # don't need to create a join from
+                                                                # root -> root
     )
 
     # generate the select_from using all the referenced tables
