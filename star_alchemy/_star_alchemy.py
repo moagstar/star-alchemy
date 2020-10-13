@@ -57,6 +57,14 @@ class StarSchema:
         """
         return {star_schema.join.table.name: star_schema.join.table for star_schema in self}
 
+    # TODO: Not sure about this name
+    @property
+    def schemas(self) -> dict:
+        """
+        :return:
+        """
+        return {s.join.table.name: s for s in self}
+
     def select(self, *args, **kwargs) -> StarSchemaSelect:
         """
 
@@ -73,13 +81,6 @@ class StarSchema:
             yield star_schema
             yield from () if star_schema.parent is None else make_path(star_schema.parent)
         return make_path(self) | to(tuple) | to(reversed) | to(tuple)
-
-    @property
-    def schemas(self) -> dict:
-        """
-        :return:
-        """
-        return {s.join.table.name: s for s in self}
 
     @property
     def name(self) -> str:
