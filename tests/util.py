@@ -38,9 +38,7 @@ def normalize_query(q):
 
 
 class AssertQueryEqualMixin:
-
     def assertQueryEqual(self, expected, actual):
-
         self.assertEqual(normalize_query(expected), normalize_query(actual))
 
 

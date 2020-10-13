@@ -75,6 +75,13 @@ class StarSchema:
         return make_path(self) | to(tuple) | to(reversed) | to(tuple)
 
     @property
+    def schemas(self) -> dict:
+        """
+        :return:
+        """
+        return {s.join.table.name: s for s in self}
+
+    @property
     def name(self) -> str:
         return self.join.table.name
 
@@ -91,11 +98,14 @@ class StarSchema:
 
         :return: Detached sub-schema.
         """
-        # TODO: This doesn't work because the other sub schemas still
-        # point to the old detached root, need to make a full clone of
-        # the entire schema.
-        join = Join(self._children[table_name].join.table)
-        return attr.evolve(self._children[table_name], parent=None, join=join)
+        def clone(schema, parent):
+            schema = attr.evolve(schema, parent=parent)
+            schema._children = {
+                table_name: clone(child, schema)
+                for table_name, child in schema._children.items()
+            }
+            return schema
+        return clone(self.schemas[table_name], None)
 
     def __iter__(self) -> typing.Iterable['StarSchema']:
         """
@@ -162,14 +172,14 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
     # traverse the expression tree to get all subexpressions, then for
     # each subexpression get the path to the center of the schema, the
     # edges in these paths are the joins that need to be made
-    star_schemas = {s.join.table: s for s in element.star_schema}
+    schemas = element.star_schema.schemas
     joins = (
         star_schema
 
         for expression in iterate(element, {'column_collections': False})
         if isinstance(expression, Column) and not isinstance(expression.table, StarSchemaSelect)
 
-        for star_schema in star_schemas[expression.table].path
+        for star_schema in schemas[expression.table.name].path
         if star_schema.parent is not None  # don't need to create a join from root -> root
     )
 

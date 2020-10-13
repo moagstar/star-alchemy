@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from star_alchemy._star_alchemy import StarSchema, Join
 from examples.sales import tables
 from tests import tables
-from tests.util import normalize_query, query_test, AssertQueryEqualMixin
+from tests.util import query_test, AssertQueryEqualMixin
 
 
 def fixture_sale():
@@ -44,7 +44,6 @@ class StarSchemaUnitTestCase(TestCase):
         cls.sales = fixture_sale()
 
     def test_path(self):
-        star_schemas = {s.join.table.name: s for s in self.sales}
         sub_tests = [
             ("sale", "sale"),
             ("product", "sale/product"),
@@ -57,9 +56,10 @@ class StarSchemaUnitTestCase(TestCase):
             ("employee_location", "sale/employee/employee_location"),
             ("customer_location", "sale/customer/customer_location"),
         ]
-        for table, expected in sub_tests:
-            with self.subTest(table):
-                actual = "/".join(x.join.table.name for x in star_schemas[table].path)
+        schemas = self.sales.schemas
+        for table_name, expected in sub_tests:
+            with self.subTest(table_name):
+                actual = "/".join(schema.name for schema in schemas[table_name].path)
                 self.assertEqual(actual, expected)
 
 
@@ -170,7 +170,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
             self.sales.tables['product_info_sub'].c.id.label('id'),
         ])
 
-    @query_test("""
+    @query_test(expected="""
         SELECT sale.id 
         FROM sale
         UNION
@@ -184,7 +184,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
             self.sales.select([self.sales.tables['customer'].c.id]),
         )
 
-    @query_test("""
+    @query_test(expected="""
         SELECT category.id 
         FROM product
         LEFT OUTER JOIN category ON product.category_id = category.id
