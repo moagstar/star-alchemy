@@ -46,24 +46,38 @@ class StarSchema:
     """
 
     """
+    StarSchemaDict = typing.Dict[str, 'StarSchema']
+    SqlAlchemyTableDict = typing.Dict[str, SqlAlchemyTable]
+
     join: Join
     parent: typing.Optional['StarSchema'] = None
-    _children: typing.Dict[str, 'StarSchema'] = attr.Factory(dict)
+    _children: StarSchemaDict = attr.Factory(dict)
+    _schemas: typing.Optional[StarSchemaDict] = None
+    _tables: typing.Optional[SqlAlchemyTableDict] = None
 
     @property
-    def tables(self) -> typing.Dict[str, SqlAlchemyTable]:
+    def tables(self) -> SqlAlchemyTableDict:
         """
         :return:
         """
-        return {star_schema.join.table.name: star_schema.join.table for star_schema in self}
+        if self._tables is None:
+            self._tables = {
+                star_schema.join.table.name: star_schema.join.table
+                for star_schema in self
+            }
+        return self._tables
 
-    # TODO: Not sure about this name
     @property
-    def schemas(self) -> dict:
+    def schemas(self) -> StarSchemaDict:
         """
         :return:
         """
-        return {s.join.table.name: s for s in self}
+        if self._schemas is None:
+            self._schemas = {s.join.table.name: s for s in self}
+        return self._schemas
+
+    def __getitem__(self, item) -> 'StarSchema':
+        return self.schemas[item]
 
     def select(self, *args, **kwargs) -> StarSchemaSelect:
         """
@@ -86,7 +100,7 @@ class StarSchema:
     def name(self) -> str:
         return self.join.table.name
 
-    def __getitem__(self, table_name: str) -> 'StarSchema':
+    def detach(self, table_name: str) -> 'StarSchema':
         """
         Get the sub-schema which references ``table_name`` and return
         detached clone of this schema. Normally joins will be generated
@@ -106,7 +120,7 @@ class StarSchema:
                 for table_name, child in schema._children.items()
             }
             return schema
-        return clone(self.schemas[table_name], None)
+        return clone(self[table_name], None)
 
     def __iter__(self) -> typing.Iterable['StarSchema']:
         """
@@ -173,7 +187,6 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
     # traverse the expression tree to get all subexpressions, then for
     # each subexpression get the path to the root of the schema, the
     # edges in these paths are the joins that need to be made
-    schemas = element.star_schema.schemas
     joins = (
         star_schema
 
@@ -181,7 +194,7 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
         if isinstance(expression, Column)                       # only interested in columns
         if not isinstance(expression.table, StarSchemaSelect)   # but not the select itself
 
-        for star_schema in schemas[expression.table.name].path
+        for star_schema in element.star_schema[expression.table.name].path
         if star_schema.parent is not None                       # don't need to create a join from
                                                                 # root -> root
     )

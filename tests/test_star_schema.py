@@ -190,5 +190,5 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         LEFT OUTER JOIN category ON product.category_id = category.id
     """)
     def test_detach(self):
-        product = self.sales['product']
+        product = self.sales.detach('product')
         return product.select([product.tables['category'].c.id])

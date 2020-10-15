@@ -24,17 +24,6 @@ galaxy schemas.
 ... })
 ```
 
-- Detach to create smaller sub schemas..
-
-```python
->>> schema['employee']
-# TODO: Come up with a good __repr__ for a schema
-```
-
-- Compose to create larger schemas...
-
-(TODO)
-
 - Don't worry about which joins to make:
 
 ```python
@@ -46,6 +35,22 @@ FROM sale
 LEFT JOIN employee ON sale.employee_id == employee.id
 LEFT JOIN department ON employee.department_id == department.id
 ```
+
+- Detach to create smaller sub schemas..
+
+```python
+>>> employee = schema.detach('employee')
+>>> normalize_query(query_str(
+...      employee.select([employee.tables["department"].c.id])
+... ))
+SELECT department.id
+FROM employee
+LEFT JOIN department ON employee.department_id == department.id
+```
+
+- Compose to create larger schemas...
+
+(TODO)
 
 ## Why would I want to use this?
 
