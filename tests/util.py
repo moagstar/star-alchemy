@@ -1,3 +1,4 @@
+import difflib
 import doctest
 
 import sqlparse
@@ -17,13 +18,18 @@ def query_str(query):
     ))
 
 
-def assert_query_equals(actual, expected):
+def assert_query_equal(actual, expected):
     if not isinstance(actual, str):
         actual = query_str(actual)
     actual_formatted_str = sqlparse.format(actual.strip(), reindent=True)
     expected_formatted_str = sqlparse.format(expected.strip(), reindent=True)
     if actual_formatted_str.lower() != expected_formatted_str.lower():
-        assert actual_formatted_str == expected_formatted_str
+        if actual_formatted_str != expected_formatted_str:
+            diff = difflib.unified_diff(
+                actual_formatted_str.split('\n'),
+                expected_formatted_str.split('\n'),
+            )
+            raise AssertionError('\n'.join(diff))
 
 
 def normalize_query(q):
