@@ -1,3 +1,5 @@
+import doctest
+
 import sqlparse
 
 
@@ -46,6 +48,25 @@ def query_test(expected):
     def decorator(fn):
         def inner(self):
             return self.assertQueryEqual(expected, fn(self))
+
         return inner
+
     return decorator
 
+
+def DocTestMixin(*run_doctests_for_these_objects):
+    """
+    Create doctests.
+    """
+
+    class DocTestMixin:
+        def test_doctest(self):
+            for doc_test_object in run_doctests_for_these_objects:
+                for test in doctest.DocTestFinder().find(doc_test_object):
+                    with self.subTest(test.name):
+                        report = []
+                        result = doctest.DocTestRunner(verbose=True).run(test, out=report.append)
+                        if result.failed:
+                            self.fail('\n'.join(report))
+
+    return DocTestMixin

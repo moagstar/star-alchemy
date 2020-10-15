@@ -4,7 +4,7 @@ Verify that the examples do what they say they do
 from unittest import TestCase
 
 from examples import sales
-from tests.util import normalize_query, AssertQueryEqualMixin, query_test
+from tests.util import AssertQueryEqualMixin, normalize_query, query_test
 
 
 class ExampleTestCase(TestCase, AssertQueryEqualMixin):

@@ -1,15 +1,13 @@
 # std
 import typing
+
 # 3rd party
 import attr
 import sqlalchemy as sa
-from funcoperators import to
 from sqlalchemy import Column
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql import ColumnCollection, ClauseElement
+from sqlalchemy.sql import ClauseElement
 from sqlalchemy.sql.visitors import iterate
-from toolz import unique
-
 
 SqlAlchemyTable = typing.Union[sa.sql.expression.Alias, sa.sql.expression.TableClause]
 
@@ -21,12 +19,20 @@ class Join:
     used as arguments to the sqlalchemy join function. So the
     defaults mimic those found in join.
     """
-    OnClauseBuilder = typing.Callable[[ColumnCollection, ColumnCollection], ClauseElement]
+    OnClauseBuilder = typing.Callable[
+        [SqlAlchemyTable, SqlAlchemyTable],
+        typing.Optional[ClauseElement],
+    ]
 
     table: SqlAlchemyTable
-    onclause: OnClauseBuilder = lambda *_: None
+    onclause: OnClauseBuilder = lambda l, r: None
     isouter: bool = True
     full: bool = False
+
+    @property
+    def name(self) -> str:
+        assert self.table.name is not None
+        return self.table.name
 
 
 class StarSchemaSelect(sa.sql.expression.Select):
@@ -44,7 +50,6 @@ class StarSchemaSelect(sa.sql.expression.Select):
 @attr.s(auto_attribs=True, hash=False, order=False)
 class StarSchema:
     """
-
     """
     StarSchemaDict = typing.Dict[str, 'StarSchema']
     SqlAlchemyTableDict = typing.Dict[str, SqlAlchemyTable]
@@ -61,23 +66,8 @@ class StarSchema:
         :return:
         """
         if self._tables is None:
-            self._tables = {
-                star_schema.join.table.name: star_schema.join.table
-                for star_schema in self
-            }
+            self._tables = {s.name: s.table for s in self}
         return self._tables
-
-    @property
-    def schemas(self) -> StarSchemaDict:
-        """
-        :return:
-        """
-        if self._schemas is None:
-            self._schemas = {s.join.table.name: s for s in self}
-        return self._schemas
-
-    def __getitem__(self, item) -> 'StarSchema':
-        return self.schemas[item]
 
     def select(self, *args, **kwargs) -> StarSchemaSelect:
         """
@@ -87,18 +77,34 @@ class StarSchema:
         return StarSchemaSelect(self, *args, **kwargs)
 
     @property
-    def path(self) -> typing.Tuple['StarSchema']:
+    def schemas(self) -> StarSchemaDict:
         """
         :return:
         """
-        def make_path(star_schema):
+        if self._schemas is None:
+            self._schemas = {s.name: s for s in self}
+        return self._schemas
+
+    def __getitem__(self, item) -> 'StarSchema':
+        return self.schemas[item]
+
+    @property
+    def path(self) -> typing.List['StarSchema']:
+        """
+        :return:
+        """
+        def make_path(star_schema) -> typing.Iterator[StarSchema]:
             yield star_schema
             yield from () if star_schema.parent is None else make_path(star_schema.parent)
-        return make_path(self) | to(tuple) | to(reversed) | to(tuple)
+        return list(reversed(list(make_path(self))))
 
     @property
     def name(self) -> str:
-        return self.join.table.name
+        return self.join.name
+
+    @property
+    def table(self) -> SqlAlchemyTable:
+        return self.join.table
 
     def detach(self, table_name: str) -> 'StarSchema':
         """
@@ -122,7 +128,7 @@ class StarSchema:
             return schema
         return clone(self[table_name], None)
 
-    def __iter__(self) -> typing.Iterable['StarSchema']:
+    def __iter__(self) -> typing.Iterator['StarSchema']:
         """
 
         :return:
@@ -131,7 +137,7 @@ class StarSchema:
             yield star_schema
             for child in star_schema._children.values():
                 yield from recurse(child)
-        return recurse(self)
+        return iter(recurse(self))
 
     def __hash__(self) -> int:
         return hash(self.join) | hash(self.parent)
@@ -164,7 +170,7 @@ class StarSchema:
                 join = table_or_join
             else:
                 join = Join(table_or_join, _default_on_clause)
-            children = {child.join.table.name: child for child in _make_star_schema(children)}
+            children = {child.name: child for child in _make_star_schema(children)}
             return StarSchema(join, children=children)
 
         def _make_star_schema(nodes):
@@ -200,11 +206,11 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
     )
 
     # generate the select_from using all the referenced tables
-    select_from = element.star_schema.join.table
-    for right in unique(joins):
+    select_from = element.star_schema.table
+    for right in dict.fromkeys(joins).keys():
         select_from = select_from.join(
-            right.join.table,
-            onclause=right.join.onclause(right.parent.join.table, right.join.table),
+            right.table,
+            onclause=right.join.onclause(right.parent.table, right.table),
             isouter=right.join.isouter,
             full=right.join.full,
         )

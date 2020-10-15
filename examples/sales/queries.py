@@ -17,4 +17,3 @@ def select_high_value_non_us_sales_per_employee():
             schema.tables['customer_location'].c.country != 'US',
         ],
     )
-

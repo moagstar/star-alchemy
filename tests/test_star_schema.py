@@ -1,10 +1,12 @@
 from unittest import TestCase
+
 import sqlalchemy as sa
 
-from star_alchemy._star_alchemy import StarSchema, Join
 from examples.sales import tables
+from star_alchemy import _star_alchemy
+from star_alchemy._star_alchemy import Join, StarSchema
 from tests import tables
-from tests.util import query_test, AssertQueryEqualMixin
+from tests.util import AssertQueryEqualMixin, DocTestMixin, query_test
 
 
 def fixture_sale():
@@ -74,48 +76,48 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         cls.sales = fixture_sale()
 
     @query_test(expected="""
-        SELECT count(*) AS count_1 
+        SELECT count(*) AS count_1
         FROM sale
     """)
     def test_no_table(self):
         return self.sales.select([sa.func.count()])
 
     @query_test(expected="""
-        SELECT sale.id 
+        SELECT sale.id
         FROM sale
     """)
     def test_no_join(self):
         return self.sales.select([self.sales.tables['sale'].c.id])
 
     @query_test(expected="""
-        SELECT employee.id 
-        FROM sale 
+        SELECT employee.id
+        FROM sale
         LEFT OUTER JOIN employee ON sale.employee_id = employee.id
     """)
     def test_join_internal_node(self):
         return self.sales.select([self.sales.tables['employee'].c.id])
 
     @query_test(expected="""
-        SELECT category.id 
-        FROM sale 
-        LEFT OUTER JOIN product ON sale.product_id = product.id 
+        SELECT category.id
+        FROM sale
+        LEFT OUTER JOIN product ON sale.product_id = product.id
         LEFT OUTER JOIN category ON product.category_id = category.id
     """)
     def test_join_leaf_node(self):
         return self.sales.select([self.sales.tables['category'].c.id])
 
     @query_test(expected="""
-        SELECT employee_location.id 
-        FROM sale 
-        LEFT OUTER JOIN employee ON sale.employee_id = employee.id 
+        SELECT employee_location.id
+        FROM sale
+        LEFT OUTER JOIN employee ON sale.employee_id = employee.id
         LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id
     """)
     def test_join_leaf_node_alias(self):
         return self.sales.select([self.sales.tables['employee_location'].c.id])
 
     @query_test(expected="""
-        SELECT employee_location.id, category.id 
-        FROM sale 
+        SELECT employee_location.id, category.id
+        FROM sale
         LEFT OUTER JOIN employee ON sale.employee_id = employee.id
         LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id
         LEFT OUTER JOIN product ON sale.product_id = product.id
@@ -128,10 +130,10 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         ])
 
     @query_test(expected="""
-        SELECT employee_location.id, customer_location.id 
-        FROM sale 
-        LEFT OUTER JOIN employee ON sale.employee_id = employee.id 
-        LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id 
+        SELECT employee_location.id, customer_location.id
+        FROM sale
+        LEFT OUTER JOIN employee ON sale.employee_id = employee.id
+        LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id
         LEFT OUTER JOIN customer ON sale.customer_id = customer.id
         LEFT OUTER JOIN location AS customer_location ON customer.location_id = customer_location.id
     """)
@@ -147,7 +149,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
             FROM product
         )
         SELECT product_info_cte.id AS id
-        FROM sale 
+        FROM sale
         LEFT OUTER JOIN product ON sale.product_id = product.id
         LEFT OUTER JOIN product_info_cte ON product.id = product_info_cte.id
     """)
@@ -158,7 +160,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
 
     @query_test(expected="""
         SELECT product_info_sub.id AS id
-        FROM sale 
+        FROM sale
         LEFT OUTER JOIN product ON sale.product_id = product.id
         LEFT OUTER JOIN (
             SELECT product.id AS id, count(*) as count_1
@@ -171,7 +173,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         ])
 
     @query_test(expected="""
-        SELECT sale.id 
+        SELECT sale.id
         FROM sale
         UNION
         SELECT customer.id
@@ -185,10 +187,14 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         )
 
     @query_test(expected="""
-        SELECT category.id 
+        SELECT category.id
         FROM product
         LEFT OUTER JOIN category ON product.category_id = category.id
     """)
     def test_detach(self):
         product = self.sales.detach('product')
         return product.select([product.tables['category'].c.id])
+
+
+class DocTestCase(TestCase, DocTestMixin(_star_alchemy)):
+    pass
