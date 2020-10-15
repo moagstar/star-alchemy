@@ -31,6 +31,9 @@ class Join:
 
     @property
     def name(self) -> str:
+        """
+        :return: The name of the right hand table in this join.
+        """
         assert self.table.name is not None
         return self.table.name
 
@@ -63,7 +66,8 @@ class StarSchema:
     @property
     def tables(self) -> SqlAlchemyTableDict:
         """
-        :return:
+        :return: Dictionary mapping names to the SQLAlchemy tables
+                 referenced by this schema.
         """
         if self._tables is None:
             self._tables = {s.name: s.table for s in self}
@@ -71,27 +75,43 @@ class StarSchema:
 
     def select(self, *args, **kwargs) -> StarSchemaSelect:
         """
+        :param args: star args to pass to select
+        :param kwargs: double star args to pass to select
 
-        :return:
+        For more information consult the SQLAlchemy documentation:
+
+        https://docs.sqlalchemy.org/en/latest/core/selectable.html#sqlalchemy.sql.expression.select
+
+        :return: StarSchemaSelect instance which will auto generate it's
+                 select_from upon compilation.
         """
         return StarSchemaSelect(self, *args, **kwargs)
 
     @property
     def schemas(self) -> StarSchemaDict:
         """
-        :return:
+        :return: Dictionary mapping table names to subschemas.
         """
         if self._schemas is None:
             self._schemas = {s.name: s for s in self}
         return self._schemas
 
-    def __getitem__(self, item) -> 'StarSchema':
-        return self.schemas[item]
+    def __getitem__(self, name) -> 'StarSchema':
+        """
+        Traverse the tree and retrieve the sub schema with the given
+        name.
+
+        :param name: The name (this is the name of the SQLAlchemy table
+                     the sub schema holds) of the sub schema to get.
+
+        :return: Sub schema referenced by the requested name.
+        """
+        return self.schemas[name]
 
     @property
     def path(self) -> typing.List['StarSchema']:
         """
-        :return:
+        :return: Path to the root of the schema.
         """
         def make_path(star_schema) -> typing.Iterator[StarSchema]:
             yield star_schema
@@ -100,10 +120,16 @@ class StarSchema:
 
     @property
     def name(self) -> str:
+        """
+        :return: The name of the table this schema references.
+        """
         return self.join.name
 
     @property
     def table(self) -> SqlAlchemyTable:
+        """
+        :return: The Sqlachemy table referenced by this schema.
+        """
         return self.join.table
 
     def detach(self, table_name: str) -> 'StarSchema':
@@ -130,8 +156,8 @@ class StarSchema:
 
     def __iter__(self) -> typing.Iterator['StarSchema']:
         """
-
-        :return:
+        :return: Iterator which traverses the tree in a depth first
+                 fashion.
         """
         def recurse(star_schema: StarSchema) -> typing.Iterable['StarSchema']:
             yield star_schema
@@ -140,6 +166,9 @@ class StarSchema:
         return iter(recurse(self))
 
     def __hash__(self) -> int:
+        """
+        :return: Hash value to uniquely identify this instance.
+        """
         return hash(self.join) | hash(self.parent)
 
     @classmethod
@@ -195,14 +224,10 @@ def compile_star_schema_select(element: StarSchemaSelect, compiler, **kw):
     # edges in these paths are the joins that need to be made
     joins = (
         star_schema
-
         for expression in iterate(element, {'column_collections': False})
         if isinstance(expression, Column)                       # only interested in columns
         if not isinstance(expression.table, StarSchemaSelect)   # but not the select itself
-
-        for star_schema in element.star_schema[expression.table.name].path
-        if star_schema.parent is not None                       # don't need to create a join from
-                                                                # root -> root
+        for star_schema in element.star_schema[expression.table.name].path[1:]
     )
 
     # generate the select_from using all the referenced tables
