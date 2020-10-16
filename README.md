@@ -70,3 +70,7 @@ schemas common in OLAP. For example when the same table is the target of
 multiple foreign keys the basic functionality of SQLAlchemy breaks down.
 Also since you might have sub-queries or CTEs which you might want to
 attach to your schema it's not always possible to use foreign keys.
+
+TODO: standard schema diagram, explain difference
+
+![star schema](doc/sales_schema.png "example star schema")

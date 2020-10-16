@@ -211,6 +211,8 @@ class DocStringTestCase(TestCase, DocTestMixin(_star_alchemy)):
 
     Most docstring checking focus on the format, which is less important
     for me.
+
+    TODO: Make this more generic with auto-discovery
     """
 
     @property
