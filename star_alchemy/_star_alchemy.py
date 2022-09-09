@@ -182,8 +182,6 @@ class StarSchema:
 
         :return: StarSchema instance created from ``dicts``.
         """
-        # TODO: Still needs cleaning up a bit
-        # TODO: Override for default_on_clause
         if len(dicts) > 1:
             raise ValueError("Star schema should have 1 root node")
 
