@@ -1,4 +1,5 @@
 # std
+import dataclasses
 import typing
 
 # 3rd party
@@ -172,7 +173,7 @@ class StarSchema:
         return hash(self.join) | hash(self.parent)
 
     @classmethod
-    def from_dicts(cls, dicts: typing.Dict[str, typing.Any]) -> 'StarSchema':
+    def from_dicts(cls, dicts: dict) -> 'StarSchema':
         """
         Create a star schema from recursive dictionaries, the key of
         each dictionary is the root table, the value being the child
@@ -182,8 +183,6 @@ class StarSchema:
 
         :return: StarSchema instance created from ``dicts``.
         """
-        # TODO: Still needs cleaning up a bit
-        # TODO: Override for default_on_clause
         if len(dicts) > 1:
             raise ValueError("Star schema should have 1 root node")
 
@@ -203,11 +202,24 @@ class StarSchema:
             return StarSchema(join, children=children)
 
         def _make_star_schema(nodes):
-            for node in nodes.items():
-                star_schema = _make_single_star_schema(*node)
-                for child in star_schema._children.values():
-                    child.parent = star_schema
-                yield star_schema
+            try:
+                for node in nodes.items():
+                    star_schema = _make_single_star_schema(*node)
+                    for child in star_schema._children.values():
+                        child.parent = star_schema
+                    yield star_schema
+            except Exception as e:
+                # When the input dictionary is not of the correct form an exception is
+                # raised here. One common reason is if you do not use an empty dict for
+                # leaf nodes, e.g. the following is an error:
+                #
+                #   StarSchema.from_dicts({
+                #       tables.sale: {
+                #           tables.product   # <- error, should be `tables.product: {}`
+                #       }
+                #   })
+                #
+                raise ValueError(nodes) from e
 
         return next(_make_star_schema(dicts))
 
