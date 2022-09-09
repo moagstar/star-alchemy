@@ -200,6 +200,22 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         return product.select([product.tables['category'].c.id])
 
 
+class StarSchemaFromDictsTestCase(TestCase):
+    """
+    Verify the functionality of the StarSchema.from_dicts function
+    """
+
+    def test_error_should_in_input_should_give_info_about_what_went_wrong(self):
+        with self.assertRaisesRegex(ValueError, "'category'"):
+            StarSchema.from_dicts({
+                tables.product: {
+                    # this is the error, we are using a set here
+                    # it should be `tables.category: {}`
+                    tables.category
+                }
+            })
+
+
 class DocStringTestCase(TestCase, DocTestMixin(_star_alchemy)):
     """
     Check the docstrings of star_alchemy module, couldn't find a library
