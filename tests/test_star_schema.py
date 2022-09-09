@@ -199,6 +199,13 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         product = self.sales.detach('product')
         return product.select([product.tables['category'].c.id])
 
+    @query_test(expected="""
+        SELECT sale.id
+        FROM sale
+    """)
+    def test_where_should_accept_no_arguments(self):
+        return self.sales.select([self.sales.tables['sale'].c.id]).where()
+
 
 class DocStringTestCase(TestCase, DocTestMixin(_star_alchemy)):
     """

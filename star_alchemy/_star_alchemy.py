@@ -49,6 +49,14 @@ class StarSchemaSelect(sa.sql.expression.Select):
         super().__init__(*args, **kwargs)
         self.star_schema = star_schema
 
+    def where(self, *args):
+        """
+        Override `where` to support `where()` i.e. empty list, this is useful
+        for dynamically generated where clauses
+        TODO: Maybe see if we can build this upstream into sqlalchemy
+        """
+        return super().where(*args) if args else self
+
 
 @attr.s(auto_attribs=True, hash=False, order=False)
 class StarSchema:
