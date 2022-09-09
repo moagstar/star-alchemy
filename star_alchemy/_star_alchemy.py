@@ -172,7 +172,7 @@ class StarSchema:
         return hash(self.join) | hash(self.parent)
 
     @classmethod
-    def from_dicts(cls, dicts: typing.Dict[str, typing.Any]) -> 'StarSchema':
+    def from_dicts(cls, dicts: dict) -> 'StarSchema':
         """
         Create a star schema from recursive dictionaries, the key of
         each dictionary is the root table, the value being the child
