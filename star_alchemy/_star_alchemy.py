@@ -51,6 +51,26 @@ class StarSchemaSelect(sa.sql.expression.Select):
         self.star_schema = star_schema
 
 
+# TODO: topology.select() or sa.select().select_from(topology)
+# TODO: how to clone and attach a new table?
+# TODO: composing schemas, e.g.
+#  ...
+#  succession = StarSchema.from_dicts({
+#      tables.succession: {
+#          jep.label('incumbent'): {},
+#          jep.label('candidate'): {},
+#      }
+#  )
+#  ...
+#  mobility = StarSchema.from_dicts({
+#      tables.mobility: {
+#          jep.label('from'): {},
+#          jep.label('to'): {},
+#      }
+#  )
+# TODO: perhaps StarSchema should be a wrapper around table?
+
+
 @attr.s(auto_attribs=True, hash=False, order=False)
 class StarSchema:
     """
@@ -187,11 +207,18 @@ class StarSchema:
             raise ValueError("Star schema should have 1 root node")
 
         def _default_on_clause(left, right):
-            try:
-                right_name = right.element.name  # aliases
-            except AttributeError:
-                right_name = right.name          # tables
-            return left.c[f'{right_name}_id'] == right.c['id']
+
+            for foreign_key in left.foreign_keys:
+                column_list = list(right.primary_key.columns)
+                if len(column_list) != 1:
+                    # TODO: Recognise composite primary / foreign key
+                    # composite keys not supported, this join must be explicitly defined
+                    raise ValueError((left, right))
+                if foreign_key.column is column_list[0]:
+                    return foreign_key.parent == column_list[0]
+
+            # couldn't find a foreign key relation, this join must be explicitly defined
+            raise ValueError((left, right))
 
         def _make_single_star_schema(table_or_join, children):
             if isinstance(table_or_join, Join):
