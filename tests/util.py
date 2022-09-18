@@ -2,6 +2,7 @@ import difflib
 import doctest
 
 import sqlparse
+import sqlvalidator
 
 
 def query_str(query):
@@ -43,6 +44,10 @@ def normalize_query(q):
         use_space_around_operators=True,
         strip_whitespace=True,
     )
+
+def validate_query(q):
+    parsed = sqlvalidator.parse(query_str(q))
+    assert parsed.is_valid(), parsed.errors
 
 
 class AssertQueryEqualMixin:
