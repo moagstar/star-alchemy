@@ -1,8 +1,7 @@
 from examples.sales import tables
-from star_alchemy import StarSchema
+from star_alchemy import Schema
 
-
-schema = StarSchema.from_dicts({
+schema = Schema({
     tables.sale: {
         tables.product: {
             tables.category: {},

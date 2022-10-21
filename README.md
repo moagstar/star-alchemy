@@ -8,9 +8,9 @@ galaxy schemas.
 - Define topology using nested dictionaries
 
 ```python
->>> from star_alchemy import StarSchema
+>>> from star_alchemy import Schema
 >>> from tests import tables
->>> schema = StarSchema.from_dicts({
+>>> schema = Schema({
 ...     tables.sale: {
 ...         tables.product: {
 ...             tables.category: {},
@@ -31,7 +31,7 @@ galaxy schemas.
 ```python
 >>> from tests.util import assert_query_equal
 >>> assert_query_equal(
-...      schema.select([schema.tables["department"].c.id]),
+...      schema.select([schema.tables.department.c.id]),
 ...      """
 ...        SELECT department.id
 ...        FROM sale
@@ -43,17 +43,7 @@ galaxy schemas.
 
 - Detach to create smaller sub schemas..
 
-```python
->>> employee = schema.detach('employee')
->>> assert_query_equal(
-...      employee.select([employee.tables["department"].c.id]),
-...      """
-...        SELECT department.id
-...        FROM employee
-...        LEFT OUTER JOIN department ON employee.department_id = department.id
-...      """
-... )
-```
+(TODO)
 
 - Compose to create larger schemas...
 
