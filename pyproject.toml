@@ -5,7 +5,7 @@ description = ""
 authors = ["Daniel Bradburn <moagstar@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.6"
+python = "^3.7"
 sqlalchemy = "^1"
 attrs = "^20.2.0"
 pycodestyle = "^2.6.0"
@@ -23,6 +23,7 @@ mistletoe = "^0.7.2"
 beautifulsoup4 = "^4.9.3"
 networkx = "^2.5"
 html5lib = "^1.1"
+black = "^22.10.0"
 
 [build-system]
 requires = ["poetry>=0.12"]

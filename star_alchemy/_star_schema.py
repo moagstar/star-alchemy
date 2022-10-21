@@ -27,6 +27,7 @@ class Schema:
     2. The tables can be inspected `Schema.tables`
     3. Queries can be generated using `Schema.select`
     """
+
     definition: dict
     on_clauses: dict = dataclasses.field(default_factory=dict)
 
@@ -42,9 +43,9 @@ class Schema:
         'product'
         """
         tables = {path[-1]: table for table, path in self.table_paths}
-        return dataclasses.make_dataclass('Tables', tables, frozen=True)(**tables)
+        return dataclasses.make_dataclass("Tables", tables, frozen=True)(**tables)
 
-    def select(self, *args, **kwargs) -> '_Select':
+    def select(self, *args, **kwargs) -> "_Select":
         """
         Generate a SQLAlchemy query. Works just like any other
         SQLALchemy query. In addition, a custom compilation step to
@@ -70,10 +71,12 @@ class Schema:
         Get a list of tuples containing the paths to the root of the schema,
         or in other words a description of how a table should be joined.
         """
+
         def _paths(obj, path=()):
             for table, value in (obj if isinstance(obj, dict) else {}).items():
                 yield table, (table_path := tuple([*path, table.name]))
                 yield from _paths(value, table_path)
+
         return list(_paths(self.definition))
 
     def on_clause(self, left: Selectable, right: Selectable) -> ClauseElement:
@@ -99,7 +102,8 @@ class Schema:
         generated it. This can then be used to automatically generate
         the `select_from` for the query.
         """
-        def __init__(self, schema: 'Schema', *args, **kwargs):
+
+        def __init__(self, schema: "Schema", *args, **kwargs):
             self._schema = schema
             super().__init__(*args, **kwargs)
 
@@ -122,9 +126,8 @@ class Schema:
         raise ValueError(error_msg)
 
     def __str__(self):
-        return '\n'.join(
-            f"{'  ' * len(path)}└─ {path[-1]}"
-            for _, path in self.table_paths
+        return "\n".join(
+            f"{'  ' * len(path)}└─ {path[-1]}" for _, path in self.table_paths
         )
 
 
