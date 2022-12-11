@@ -109,6 +109,7 @@ class Schema:
         generated it. This can then be used to automatically generate
         the `select_from` for the query.
         """
+
         _schema = NotImplemented
 
         def select_from(self, *args, **kwargs):
@@ -184,7 +185,6 @@ def _compile_schema_select(select: Schema._Select, compiler, **kw):
     elif select._schema.root in tables:
         select_from = select._schema.root
         select = super(Schema._Select, select).select_from(select_from)
-
 
     compiled = compiler.process(super(Schema._Select, select), **kw)
     return compiled

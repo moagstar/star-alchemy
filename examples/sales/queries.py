@@ -14,6 +14,6 @@ def select_high_value_non_us_sales_per_employee():
         ],
         filters=[
             schema.tables.product.c.unit_price > 20,
-            schema.tables.customer_location.c.country != 'US',
+            schema.tables.customer_location.c.country != "US",
         ],
     )
