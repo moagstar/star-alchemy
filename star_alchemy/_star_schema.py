@@ -31,6 +31,10 @@ class Schema:
     definition: dict
     on_clauses: dict = dataclasses.field(default_factory=dict)
 
+    @property
+    def root(self):
+        return self.table_paths[0][0]
+
     @cached_property
     def tables(self):
         """
@@ -173,9 +177,14 @@ def _compile_schema_select(select: Schema._Select, compiler, **kw):
         select_from = left_table if select_from is None else select_from
         select_from = select_from.join(right_table, on_clause, isouter=True)
 
-    # Add the select_from to the select and let sqlalchemy do the rest
+    # Add the select_from to the select and let sqlalchemy do the rest, there are
+    # no joins, we still might need to select from the root table in the schema
     if select_from is not None:
         select = super(Schema._Select, select).select_from(select_from)
+    elif select._schema.root in tables:
+        select_from = select._schema.root
+        select = super(Schema._Select, select).select_from(select_from)
+
 
     compiled = compiler.process(super(Schema._Select, select), **kw)
     return compiled

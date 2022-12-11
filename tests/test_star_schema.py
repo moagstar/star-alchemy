@@ -99,6 +99,14 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         return self.sales.select([self.sales.tables.sale.c.id])
 
     @query_test(expected="""
+        SELECT 1 AS anon_1
+        FROM sale
+        ORDER BY sale.product_id
+    """)
+    def test_no_join_order_by(self):
+        return self.sales.select([sa.literal(1)]).order_by(self.sales.tables.sale.c.product_id)
+
+    @query_test(expected="""
         SELECT employee.id
         FROM sale
         LEFT OUTER JOIN employee ON sale.employee_id = employee.id
