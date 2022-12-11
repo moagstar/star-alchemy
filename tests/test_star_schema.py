@@ -139,7 +139,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         ])
 
     @query_test(expected="""
-        SELECT employee_location.id, customer_location.id
+        SELECT employee_location.id, customer_location.id AS id_1
         FROM sale
         LEFT OUTER JOIN employee ON sale.employee_id = employee.id
         LEFT OUTER JOIN location AS employee_location ON employee.location_id = employee_location.id
@@ -193,6 +193,16 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         return sa.union(
             self.sales.select([self.sales.tables.sale.c.id]),
             self.sales.select([self.sales.tables.customer.c.id]),
+        )
+
+    @query_test(expected="""
+        SELECT department.id
+        FROM department
+    """)
+    def test_select_from_override(self):
+        return (
+            self.sales.select([self.sales.tables.department.c.id])
+            .select_from(self.sales.tables.department)
         )
 
     def test_to_str(self):

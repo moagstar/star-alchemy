@@ -63,7 +63,10 @@ class Schema:
         ...      '''
         ... )
         """
-        return self._Select(self, *args, **kwargs)
+        select = self._Select._create(*args, **kwargs)
+        select._schema = self
+        select.select_from_override = False
+        return select
 
     @cached_property
     def table_paths(self) -> list[tuple[str]]:
@@ -102,10 +105,16 @@ class Schema:
         generated it. This can then be used to automatically generate
         the `select_from` for the query.
         """
+        _schema = NotImplemented
 
-        def __init__(self, schema: "Schema", *args, **kwargs):
-            self._schema = schema
-            super().__init__(*args, **kwargs)
+        def select_from(self, *args, **kwargs):
+            """
+            It should be possible to completely override the automatically generated
+            select_from, so we set a flag to signal to _compile_schema_select that
+            we do not need automatically generate the select_from.
+            """
+            self.select_from_override = True
+            return super().select_from(*args, **kwargs)
 
     @staticmethod
     def _default_on_clause(left: Selectable, right: Selectable) -> ClauseElement:
@@ -126,9 +135,8 @@ class Schema:
         raise ValueError(error_msg)
 
     def __str__(self):
-        return "\n".join(
-            f"{'  ' * len(path)}└─ {path[-1]}" for _, path in self.table_paths
-        )
+        lines = (f"{'  ' * len(path)}└─ {path[-1]}" for _, path in self.table_paths)
+        return "\n".join(lines)
 
 
 @compiles(Schema._Select)
@@ -139,10 +147,16 @@ def _compile_schema_select(select: Schema._Select, compiler, **kw):
     in the query and the schema which defines how tables should
     be joined.
     """
+    if select.select_from_override:
+        compiled = compiler.process(super(Schema._Select, select), **kw)
+        return compiled
+
     # get the columns (and thus the tables) from the sub-expressions involved in this query
     tables = {x.table for x in visitors.iterate(select, {}) if isinstance(x, Column)}
 
-    # TODO: Perhaps only join to lowest common root rather than root?
+    # TODO: Perhaps only join to lowest common root rather than root? For example
+    #  if there are no expressions coming directly from job, do we always need to
+    #  join to job?
     # use paths to generate the joins based on the tables present in this query
     joins = unique(
         join
