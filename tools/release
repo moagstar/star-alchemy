@@ -20,15 +20,15 @@ assert branch == MAIN_BRANCH, branch
 
 # check there are no local changes
 status = _("git status --porcelain")
-#assert status == "", status
+assert status == "", status
 
 # run tests (don't release anything that is failing)
 _("tools/qa")
 
 # bump version, create and push branch
+_("git pull")
 _(f"poetry version {bump_rule}")
 version = _("poetry version --short")
-_("git pull")
 _(f"git checkout -b {version}")
 _("git add pyproject.toml")
 _(f'git commit -m "{version}"')
