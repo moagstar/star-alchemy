@@ -33,6 +33,7 @@ _(f"git checkout -b {version}")
 _("git add pyproject.toml")
 _(f'git commit -m "{version}"')
 _("git push origin HEAD")
+_("git checkout main")
 
 print('\n\n')
 print('✨' * 50)
