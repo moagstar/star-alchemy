@@ -3,8 +3,8 @@ from functools import cached_property, partial
 
 from sqlalchemy import Column
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql import Select, visitors, Selectable, FromClause, ClauseElement
-from toolz import sliding_window, first, unique
+from sqlalchemy.sql import ClauseElement, FromClause, Select, Selectable, visitors
+from toolz import first, sliding_window, unique
 
 
 @dataclasses.dataclass(frozen=True)

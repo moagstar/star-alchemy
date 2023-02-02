@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -euxo pipefail
+
+# lint
+isort star_alchemy tests --check
+black star_alchemy tests --check
+
+# type check
+mypy star_alchemy
+
+# unit tests
+python -m unittest discover tests
