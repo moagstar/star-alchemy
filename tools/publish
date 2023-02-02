@@ -22,6 +22,7 @@ _("tools/qa")
 
 # publish and create tag
 _("git pull")
+_("poetry build")
 _("poetry publish")
 version = _("poetry version --short")
 _(f"git tag {version}")
