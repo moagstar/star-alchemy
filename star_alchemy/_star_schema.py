@@ -73,7 +73,7 @@ class Schema:
         return select
 
     @cached_property
-    def table_paths(self) -> list[tuple[str]]:
+    def table_paths(self) -> list[tuple[str, str]]:
         """
         Get a list of tuples containing the paths to the root of the schema,
         or in other words a description of how a table should be joined.
@@ -172,19 +172,28 @@ def _compile_schema_select(select: Schema._Select, compiler, **kw):
 
     select_from = None
     for join in joins:
+
+        # get the left and right tables of the join
         get_table = partial(getattr, select._schema.tables)
         left_table, right_table = map(get_table, join)
+
+        # get the on clause which should be used to join the two tables
         on_clause = select._schema.on_clause(left_table, right_table)
+
+        # generate the select_from, because we are performing this in a loop
+        # the select_from is built from the previous iteration, iteratively
+        # building the joins needed for this selecct_from
         select_from = left_table if select_from is None else select_from
         select_from = select_from.join(right_table, on_clause, isouter=True)
 
-    # Add the select_from to the select and let sqlalchemy do the rest, there are
-    # no joins, we still might need to select from the root table in the schema
+    # Add the select_from to the select, if there are no joins, we still might
+    # need to select from the root table in the schema
     if select_from is not None:
         select = super(Schema._Select, select).select_from(select_from)
     elif select._schema.root in tables:
         select_from = select._schema.root
         select = super(Schema._Select, select).select_from(select_from)
 
+    # Let sqlalchemy perform the rest of the compilation
     compiled = compiler.process(super(Schema._Select, select), **kw)
     return compiled
