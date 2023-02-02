@@ -6,7 +6,7 @@ authors = ["Daniel Bradburn <moagstar@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-sqlalchemy = "^1"
+sqlalchemy = "^2"
 attrs = "^20.2.0"
 pycodestyle = "^2.6.0"
 "ruamel.yaml" = "^0.17.21"
@@ -16,7 +16,7 @@ toolz = "^0.12.0"
 
 [tool.poetry.dev-dependencies]
 sqlparse = "^0.3.1"
-mypy = "^0.790"
+mypy = "^0.991"
 sqlalchemy-stubs = "^0.3"
 pycodestyle = "^2.6.0"
 mistletoe = "^0.7.2"

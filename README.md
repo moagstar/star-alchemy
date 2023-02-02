@@ -31,7 +31,7 @@ galaxy schemas.
 ```python
 >>> from tests.util import assert_query_equal
 >>> assert_query_equal(
-...      schema.select([schema.tables.department.c.id]),
+...      schema.select(schema.tables.department.c.id),
 ...      """
 ...        SELECT department.id
 ...        FROM sale

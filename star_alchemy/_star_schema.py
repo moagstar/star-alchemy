@@ -59,7 +59,7 @@ class Schema:
         >>> from examples.sales.schema import schema
         >>> from tests.util import assert_query_equal
         >>> assert_query_equal(
-        ...      schema.select([schema.tables.product.c.id]),
+        ...      schema.select(schema.tables.product.c.id),
         ...      '''
         ...        SELECT product.id
         ...        FROM sale
@@ -67,10 +67,7 @@ class Schema:
         ...      '''
         ... )
         """
-        select = self._Select._create(*args, **kwargs)
-        select._schema = self
-        select.select_from_override = False
-        return select
+        return self._Select(self, *args, **kwargs)
 
     @cached_property
     def table_paths(self) -> list[tuple[str, str]]:
@@ -110,7 +107,10 @@ class Schema:
         the `select_from` for the query.
         """
 
-        _schema = NotImplemented
+        def __init__(self, schema: "Schema", *args, **kwargs):
+            self._schema = schema
+            self.select_from_override = False
+            super().__init__(*args, **kwargs)
 
         def select_from(self, *args, **kwargs):
             """

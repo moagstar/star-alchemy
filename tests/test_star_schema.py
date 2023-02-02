@@ -12,7 +12,7 @@ def fixture_sale():
     """
     :return: Schema that can be used for testing
     """
-    product_info = sa.select([tables.product.c.id, sa.func.count()])
+    product_info = sa.select(tables.product.c.id, sa.func.count())
     product_info_sub = product_info.alias("product_info_sub")
     product_info_cte = product_info.cte("product_info_cte")
     employee_location = tables.location.alias("employee_location")
@@ -105,7 +105,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     """
     )
     def test_no_table(self):
-        return self.sales.select([sa.func.count()])
+        return self.sales.select(sa.func.count())
 
     @query_test(
         expected="""
@@ -114,7 +114,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     """
     )
     def test_no_join(self):
-        return self.sales.select([self.sales.tables.sale.c.id])
+        return self.sales.select(self.sales.tables.sale.c.id)
 
     @query_test(
         expected="""
@@ -124,7 +124,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     """
     )
     def test_no_join_order_by(self):
-        return self.sales.select([sa.literal(1)]).order_by(
+        return self.sales.select(sa.literal(1)).order_by(
             self.sales.tables.sale.c.product_id
         )
 
@@ -136,7 +136,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     """
     )
     def test_join_internal_node(self):
-        return self.sales.select([self.sales.tables.employee.c.id])
+        return self.sales.select(self.sales.tables.employee.c.id)
 
     @query_test(
         expected="""
@@ -147,7 +147,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     """
     )
     def test_join_leaf_node(self):
-        return self.sales.select([self.sales.tables.category.c.id])
+        return self.sales.select(self.sales.tables.category.c.id)
 
     @query_test(
         expected="""
@@ -158,7 +158,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     """
     )
     def test_join_leaf_node_alias(self):
-        return self.sales.select([self.sales.tables.employee_location.c.id])
+        return self.sales.select(self.sales.tables.employee_location.c.id)
 
     @query_test(
         expected="""
@@ -172,10 +172,8 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     )
     def test_join_branching(self):
         return self.sales.select(
-            [
-                self.sales.tables.employee_location.c.id.label("employee_location_id"),
-                self.sales.tables.category.c.id.label("category_id"),
-            ]
+            self.sales.tables.employee_location.c.id.label("employee_location_id"),
+            self.sales.tables.category.c.id.label("category_id"),
         )
 
     @query_test(
@@ -190,10 +188,8 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     )
     def test_branching_join_duplicate_underlying_table(self):
         return self.sales.select(
-            [
-                self.sales.tables.employee_location.c.id,
-                self.sales.tables.customer_location.c.id,
-            ]
+            self.sales.tables.employee_location.c.id,
+            self.sales.tables.customer_location.c.id,
         )
 
     @query_test(
@@ -210,9 +206,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     )
     def test_join_cte(self):
         return self.sales.select(
-            [
-                self.sales.tables.product_info_cte.c.id.label("id"),
-            ]
+            self.sales.tables.product_info_cte.c.id.label("id"),
         )
 
     @query_test(
@@ -228,9 +222,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     )
     def test_join_sub_select(self):
         return self.sales.select(
-            [
-                self.sales.tables.product_info_sub.c.id.label("id"),
-            ]
+            self.sales.tables.product_info_sub.c.id.label("id"),
         )
 
     @query_test(
@@ -245,8 +237,8 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     )
     def test_union(self):
         return sa.union(
-            self.sales.select([self.sales.tables.sale.c.id]),
-            self.sales.select([self.sales.tables.customer.c.id]),
+            self.sales.select(self.sales.tables.sale.c.id),
+            self.sales.select(self.sales.tables.customer.c.id),
         )
 
     @query_test(
@@ -256,7 +248,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
     """
     )
     def test_select_from_override(self):
-        return self.sales.select([self.sales.tables.department.c.id]).select_from(
+        return self.sales.select(self.sales.tables.department.c.id).select_from(
             self.sales.tables.department
         )
 
