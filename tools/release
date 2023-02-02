@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+
+# prepare a release
+
+from subprocess import check_output
+from shlex import split
+import sys
+
+MAIN_BRANCH = "main"
+
+assert len(sys.argv) > 1 and sys.argv[1] in ("patch", "minor", "major")
+bump_rule = sys.argv[1]
+
+_ = lambda x: check_output(split(x)).decode().strip()
+header = lambda x: print("\n" + f" {x} ".center(70, "="), end="\n\n")
+
+# check we are creating a release from the main branch
+branch = _("git rev-parse --symbolic-full-name --abbrev-ref HEAD")
+assert branch == MAIN_BRANCH, branch
+
+# check there are no local changes
+status = _("git status --porcelain")
+#assert status == "", status
+
+# run tests (don't release anything that is failing)
+_("tools/qa")
+
+# bump version, create and push branch
+_(f"poetry version {bump_rule}")
+version = _("poetry version --short")
+_("git pull")
+_(f"git checkout -b {version}")
+_("git add pyproject.toml")
+_(f'git commit -m "{version}"')
+_("git push origin HEAD")
+
+print('\n\n')
+print('✨' * 50)
+print(f"\n  Release {version} created.\n\n  After release PR is merged, run publish to ./tools/publish this release\n")
+print('✨' * 50)
+print('\n')

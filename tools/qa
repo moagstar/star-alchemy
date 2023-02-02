@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+
+# run quality assurance checks
+
+from subprocess import call
+from shlex import split
+
+_ = lambda x: call(split(x))
+header = lambda x: print('\n' + f' {x} '.center(70, '='), end='\n\n')
+
+header('lint')
+_('isort star_alchemy tests --check')
+_('black star_alchemy tests --check')
+
+header('type check')
+_('mypy star_alchemy')
+
+header('unit tests')
+_('python -m unittest discover tests')
+
