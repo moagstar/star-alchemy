@@ -64,3 +64,25 @@ attach to your schema it's not always possible to use foreign keys.
 TODO: standard schema diagram, explain difference
 
 ![star schema](doc/sales_schema.png "example star schema")
+
+## Dev-guide
+
+* Add pypi api token (https://pypi.org/help/#apitoken)...
+
+```
+poetry config pypi-token.pypi my-token
+```
+
+* To prepare a release (run inside virtual env, since tests will be run)...
+
+```
+./tools/release
+```
+
+Then create a PR for this version, and merge to main
+
+* To publish a release (run inside virtual env, since tests will be run)...
+
+```
+./tools/publish
+```
