@@ -1,3 +1,3 @@
-from star_alchemy._star_alchemy import Join, StarSchema
+from star_alchemy._star_schema import Schema
 
-__all__ = ['StarSchema', 'Join']
+__all__ = ["Schema"]

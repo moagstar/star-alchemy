@@ -2,6 +2,7 @@ import difflib
 import doctest
 
 import sqlparse
+import sqlvalidator
 
 
 def query_str(query):
@@ -12,10 +13,13 @@ def query_str(query):
     :return:
     """
     from sqlalchemy.dialects import postgresql
-    return str(query.compile(
-        dialect=postgresql.dialect(),
-        compile_kwargs={"literal_binds": True},
-    ))
+
+    return str(
+        query.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
 
 
 def assert_query_equal(actual, expected):
@@ -26,10 +30,10 @@ def assert_query_equal(actual, expected):
     if actual_formatted_str.lower() != expected_formatted_str.lower():
         if actual_formatted_str != expected_formatted_str:
             diff = difflib.unified_diff(
-                actual_formatted_str.split('\n'),
-                expected_formatted_str.split('\n'),
+                actual_formatted_str.split("\n"),
+                expected_formatted_str.split("\n"),
             )
-            raise AssertionError('\n'.join(diff))
+            raise AssertionError("\n".join(diff))
 
 
 def normalize_query(q):
@@ -39,10 +43,15 @@ def normalize_query(q):
         q.strip(),
         reindent=True,
         reindent_aligned=True,
-        keyword_case='upper',
+        keyword_case="upper",
         use_space_around_operators=True,
         strip_whitespace=True,
     )
+
+
+def validate_query(q):
+    parsed = sqlvalidator.parse(query_str(q))
+    assert parsed.is_valid(), parsed.errors
 
 
 class AssertQueryEqualMixin:
@@ -71,8 +80,10 @@ def DocTestMixin(*run_doctests_for_these_objects):
                 for test in doctest.DocTestFinder().find(doc_test_object):
                     with self.subTest(test.name):
                         report = []
-                        result = doctest.DocTestRunner(verbose=True).run(test, out=report.append)
+                        result = doctest.DocTestRunner(verbose=True).run(
+                            test, out=report.append
+                        )
                         if result.failed:
-                            self.fail('\n'.join(report))
+                            self.fail("\n".join(report))
 
     return DocTestMixin
