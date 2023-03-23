@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+# std
+from subprocess import call
+from shlex import split
+
+_ = lambda x: call(split(x))
+header = lambda x: print('\n' + f' {x} '.center(70, '='), end='\n\n')
+
+header('fix lint')
+_('isort star_alchemy tests')
+_('black star_alchemy tests')
