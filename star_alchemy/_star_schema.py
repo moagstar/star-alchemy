@@ -49,6 +49,13 @@ class Schema:
         tables = {path[-1]: table for table, path in self.table_paths}
         return dataclasses.make_dataclass("Tables", tables, frozen=True)(**tables)
 
+    def clone(self, /, **changes) -> 'Schema':
+        """
+        Clone this `Schema`, applying the given changes, which are keyword
+        arguments matching the attributes of `Schema`.
+        """
+        return dataclasses.replace(self, **changes)
+
     def select(self, *args, **kwargs) -> "_Select":
         """
         Generate a SQLAlchemy query. Works just like any other
