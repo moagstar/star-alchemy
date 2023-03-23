@@ -15,7 +15,7 @@ OnClause = typing.Callable[[Selectable, Selectable], ClauseElement]
 @dataclasses.dataclass
 class Join:
     on_clause_func: OnClause | None = None
-    isouter: bool = False
+    isouter: bool = True
     full: bool = False
 
     def __post_init__(self):
