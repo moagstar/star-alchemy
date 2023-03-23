@@ -1,10 +1,29 @@
 import dataclasses
+import typing
 from functools import cached_property, partial
+from typing import TypedDict
 
 from sqlalchemy import Column
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import ClauseElement, FromClause, Select, Selectable, visitors
 from toolz import first, sliding_window, unique
+
+LeftRight = tuple[Selectable, Selectable]
+OnClause = typing.Callable[[Selectable, Selectable], ClauseElement]
+
+
+@dataclasses.dataclass
+class Join:
+    on_clause_func: OnClause | None = None
+    isouter: bool = False
+    full: bool = False
+
+    def __post_init__(self):
+        if not self.isouter and self.full:
+            raise ValueError("Cannot specify full=True unless isouter is also True")
+
+
+JoinDict = dict[LeftRight, Join | OnClause]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -29,7 +48,7 @@ class Schema:
     """
 
     definition: dict
-    on_clauses: dict = dataclasses.field(default_factory=dict)
+    joins: JoinDict = dataclasses.field(default_factory=dict)
 
     @property
     def root(self):
@@ -83,7 +102,9 @@ class Schema:
 
         return list(_paths(self.definition))
 
-    def on_clause(self, left: Selectable, right: Selectable) -> ClauseElement:
+    def join(
+        self, left: Selectable, right: Selectable
+    ) -> tuple[ClauseElement, bool, bool]:
         """
         Generate the on_clause for joining two tables. If there is a
         simple foreign key relationship between the tables then it is
@@ -96,9 +117,23 @@ class Schema:
 
         :return: Expression which is used to join the two tables.
         """
-        on_clause_func = self.on_clauses.get((left, right), self._default_on_clause)
-        on_clause = on_clause_func(left, right)
-        return on_clause
+        join = self.joins.get((left, right), self._default_on_clause)
+
+        if isinstance(join, Join):
+            on_clause_func = (
+                self._default_on_clause
+                if join.on_clause_func is None
+                else join.on_clause_func
+            )
+            on_clause = on_clause_func(left, right)
+            isouter = join.isouter
+            full = join.full
+        else:
+            on_clause = join(left, right)
+            isouter = True
+            full = False
+
+        return on_clause, isouter, full
 
     class _Select(Select):
         """
@@ -178,13 +213,13 @@ def _compile_schema_select(select: Schema._Select, compiler, **kw):
         left_table, right_table = map(get_table, join)
 
         # get the on clause which should be used to join the two tables
-        on_clause = select._schema.on_clause(left_table, right_table)
+        join = select._schema.join(left_table, right_table)
 
         # generate the select_from, because we are performing this in a loop
         # the select_from is built from the previous iteration, iteratively
         # building the joins needed for this selecct_from
         select_from = left_table if select_from is None else select_from
-        select_from = select_from.join(right_table, on_clause, isouter=True)
+        select_from = select_from.join(right_table, *join)
 
     # Add the select_from to the select, if there are no joins, we still might
     # need to select from the root table in the schema

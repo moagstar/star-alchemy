@@ -4,6 +4,7 @@ import sqlalchemy as sa
 
 from examples.sales import tables
 from star_alchemy import _star_schema
+from star_alchemy._star_schema import Join
 from tests import tables
 from tests.util import AssertQueryEqualMixin, DocTestMixin, query_test
 
@@ -17,6 +18,12 @@ def fixture_sale():
     product_info_cte = product_info.cte("product_info_cte")
     employee_location = tables.location.alias("employee_location")
     customer_location = tables.location.alias("customer_location")
+    location_false_false = tables.location.alias("location_false_false")
+    location_true_false = tables.location.alias("location_true_false")
+    location_true_true = tables.location.alias("location_true_true")
+    location_none_false_false = tables.location.alias("location_none_false_false")
+    location_none_true_false = tables.location.alias("location_none_true_false")
+    location_none_true_true = tables.location.alias("location_none_true_true")
 
     definition = {
         tables.sale: {
@@ -31,18 +38,36 @@ def fixture_sale():
             },
             tables.customer: {
                 customer_location: {},
+                location_false_false: {},
+                location_true_false: {},
+                location_true_true: {},
+                location_none_false_false: {},
+                location_none_true_false: {},
+                location_none_true_true: {},
             },
         },
     }
 
-    on_clauses = {
+    joins = {
         (tables.product, product_info_sub): lambda l, r: l.c.id == r.c.id,
         (tables.product, product_info_cte): lambda l, r: l.c.id == r.c.id,
         (tables.employee, employee_location): lambda l, r: l.c.location_id == r.c.id,
         (tables.customer, customer_location): lambda l, r: l.c.location_id == r.c.id,
+        (tables.customer, location_false_false): Join(
+            lambda l, r: l.c.location_id == r.c.id, False, False
+        ),
+        (tables.customer, location_true_false): Join(
+            lambda l, r: l.c.location_id == r.c.id, True, False
+        ),
+        (tables.customer, location_true_true): Join(
+            lambda l, r: l.c.location_id == r.c.id, True, True
+        ),
+        (tables.customer, location_none_false_false): Join(isouter=False, full=False),
+        (tables.customer, location_none_true_false): Join(isouter=True, full=False),
+        (tables.customer, location_none_true_true): Join(isouter=True, full=True),
     }
 
-    return _star_schema.Schema(definition, on_clauses)
+    return _star_schema.Schema(definition, joins)
 
 
 class StarSchemaUnitTestCase(TestCase):
@@ -194,6 +219,38 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
 
     @query_test(
         expected="""
+        SELECT  location_false_false.id AS _1,
+                location_true_false.id AS _2,
+                location_true_true.id AS _3,
+                location_none_false_false.id AS _4,
+                location_none_true_false.id AS _5,
+                location_none_true_true.id AS _6
+        FROM sale
+        LEFT OUTER JOIN customer ON sale.customer_id = customer.id
+        JOIN location AS location_false_false ON customer.location_id = location_false_false.id
+        LEFT OUTER JOIN location AS location_true_false ON customer.location_id = location_true_false.id
+        FULL OUTER JOIN location AS location_true_true ON customer.location_id = location_true_true.id
+        JOIN location AS location_none_false_false ON customer.location_id = location_none_false_false.id
+        LEFT OUTER JOIN location AS location_none_true_false ON customer.location_id = location_none_true_false.id
+        FULL OUTER JOIN location AS location_none_true_true ON customer.location_id = location_none_true_true.id
+    """
+    )
+    def test_custom_joins(self):
+        return self.sales.select(
+            self.sales.tables.location_false_false.c.id.label("_1"),
+            self.sales.tables.location_true_false.c.id.label("_2"),
+            self.sales.tables.location_true_true.c.id.label("_3"),
+            self.sales.tables.location_none_false_false.c.id.label("_4"),
+            self.sales.tables.location_none_true_false.c.id.label("_5"),
+            self.sales.tables.location_none_true_true.c.id.label("_6"),
+        )
+
+    def test_custom_join_with__isouter_false_and_full_true_should_error(self):
+        with self.assertRaises(ValueError):
+            Join(lambda l, r: l.c.id == r.c.id, isouter=False, full=True)
+
+    @query_test(
+        expected="""
         WITH product_info_cte AS (
             SELECT product.id AS id, count(*) as count_1
             FROM product
@@ -253,7 +310,7 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
         )
 
     def test_to_str(self):
-        actual = str(self.sales)
+        actual = str(self.sales) + "\n"
         expected = (
             "  └─ sale\n"
             "    └─ product\n"
@@ -264,7 +321,13 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
             "      └─ department\n"
             "      └─ employee_location\n"
             "    └─ customer\n"
-            "      └─ customer_location"
+            "      └─ customer_location\n"
+            "      └─ location_false_false\n"
+            "      └─ location_true_false\n"
+            "      └─ location_true_true\n"
+            "      └─ location_none_false_false\n"
+            "      └─ location_none_true_false\n"
+            "      └─ location_none_true_true\n"
         )
         self.assertEqual(actual, expected)
 
