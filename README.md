@@ -41,6 +41,22 @@ galaxy schemas.
 ... )
 ```
 
+- Customise the joins if necessary:
+
+```python
+>>> from star_alchemy import Schema, Join
+>>> from tests import tables
+>>> definition = {
+...     tables.sale: {
+...         tables.product: {},
+...     },
+... }
+>>> joins = {
+...     (tables.sale, tables.product): Join(isouter=False)
+... }
+>>> schema = Schema(definition, joins)
+```
+
 - Detach to create smaller sub schemas..
 
 (TODO)
