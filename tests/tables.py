@@ -9,6 +9,7 @@ sale = sa.Table(
     sa.Column("product_id", sa.Integer, sa.ForeignKey("product.id")),
     sa.Column("employee_id", sa.Integer, sa.ForeignKey("employee.id")),
     sa.Column("customer_id", sa.Integer, sa.ForeignKey("customer.id")),
+    sa.Column("dynamic_id", sa.Integer),
     sa.Column("total", sa.Integer),
     sa.Column("quantity", sa.Integer),
     sa.Column("discount", sa.Integer),
