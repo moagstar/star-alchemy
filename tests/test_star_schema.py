@@ -2,7 +2,6 @@ from unittest import TestCase
 
 import sqlalchemy as sa
 
-from examples.sales import tables
 from star_alchemy import _star_schema
 from star_alchemy._star_schema import Join
 from tests import tables
@@ -24,9 +23,11 @@ def fixture_sale():
     location_none_false_false = tables.location.alias("location_none_false_false")
     location_none_true_false = tables.location.alias("location_none_true_false")
     location_none_true_true = tables.location.alias("location_none_true_true")
+    dynamic_table = sa.text("select 1 as id").columns(id=sa.INT).cte("dynamic")
 
     definition = {
         tables.sale: {
+            dynamic_table: {},
             tables.product: {
                 tables.category: {},
                 product_info_sub: {},
@@ -53,6 +54,7 @@ def fixture_sale():
         (tables.product, product_info_cte): lambda l, r: l.c.id == r.c.id,
         (tables.employee, employee_location): lambda l, r: l.c.location_id == r.c.id,
         (tables.customer, customer_location): lambda l, r: l.c.location_id == r.c.id,
+        (tables.sale, dynamic_table): lambda l, r: l.c.dynamic_id == r.c.id,
         (tables.customer, location_false_false): Join(
             lambda l, r: l.c.location_id == r.c.id, False, False
         ),
@@ -309,10 +311,24 @@ class StarSchemaQueryTestCase(TestCase, AssertQueryEqualMixin):
             self.sales.tables.department
         )
 
+    @query_test(
+        expected="""
+            WITH dynamic AS (
+                SELECT 1 AS id
+            )
+            SELECT dynamic.id
+            FROM sale
+            LEFT OUTER JOIN dynamic ON sale.dynamic_id = dynamic.id
+    """
+    )
+    def test_select_from_dynamic(self):
+        return self.sales.select(self.sales.tables.dynamic.c.id)
+
     def test_to_str(self):
         actual = str(self.sales) + "\n"
         expected = (
             "  └─ sale\n"
+            "    └─ dynamic\n"
             "    └─ product\n"
             "      └─ category\n"
             "      └─ product_info_sub\n"

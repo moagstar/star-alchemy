@@ -1,11 +1,10 @@
 import dataclasses
 import typing
 from functools import cached_property, partial
-from typing import TypedDict
 
-from sqlalchemy import Column
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import ClauseElement, FromClause, Select, Selectable, visitors
+from sqlalchemy.sql.elements import ColumnClause
 from toolz import first, sliding_window, unique
 
 LeftRight = tuple[Selectable, Selectable]
@@ -192,7 +191,9 @@ def _compile_schema_select(select: Schema._Select, compiler, **kw):
         return compiled
 
     # get the columns (and thus the tables) from the sub-expressions involved in this query
-    tables = {x.table for x in visitors.iterate(select, {}) if isinstance(x, Column)}
+    tables = {
+        x.table for x in visitors.iterate(select, {}) if isinstance(x, ColumnClause)
+    }
 
     # TODO: Perhaps only join to lowest common root rather than root? For example
     #  if there are no expressions coming directly from job, do we always need to
