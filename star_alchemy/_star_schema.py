@@ -192,7 +192,9 @@ def _compile_schema_select(select: Schema._Select, compiler, **kw):
 
     # get the columns (and thus the tables) from the sub-expressions involved in this query
     tables = {
-        x.table for x in visitors.iterate(select, {}) if isinstance(x, ColumnClause)
+        x.table
+        for x in visitors.iterate(select, {})
+        if isinstance(x, ColumnClause) and x.table is not None
     }
 
     # TODO: Perhaps only join to lowest common root rather than root? For example
